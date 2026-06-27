@@ -11,13 +11,17 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin },
-    })
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: window.location.origin },
+      })
+      if (error) setError(error.message || `Error ${error.status}: check Supabase config`)
+      else setSent(true)
+    } catch (e) {
+      setError(e.message || 'Could not reach Supabase — check environment variables')
+    }
     setLoading(false)
-    if (error) setError(error.message || error.status || JSON.stringify(error))
-    else setSent(true)
   }
 
   return (
