@@ -1,0 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=Poppins:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-soft-butter text-classic-navy font-sans m-0;
+  }
+}
+
+@layer components {
+  .eyebrow {
+    @apply font-sans text-[9pt] font-bold tracking-[0.2em] uppercase text-denim;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-2.5 rounded-xl border border-powder bg-soft-butter text-classic-navy
+           placeholder-denim/50 focus:outline-none focus:ring-2 focus:ring-atlantic-navy/30 text-sm
+           transition-colors;
+  }
+}
