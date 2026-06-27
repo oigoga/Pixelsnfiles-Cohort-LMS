@@ -16,7 +16,7 @@ export default function Login() {
       options: { emailRedirectTo: window.location.origin },
     })
     setLoading(false)
-    if (error) setError(error.message)
+    if (error) setError(error.message || error.status || JSON.stringify(error))
     else setSent(true)
   }
 
