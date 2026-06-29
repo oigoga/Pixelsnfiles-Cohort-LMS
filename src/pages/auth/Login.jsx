@@ -1,7 +1,16 @@
 import { useState } from 'react'
+import { Navigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../context/AuthContext'
 
 export default function Login() {
+  const { session, profile } = useAuth()
+
+  // If already signed in (or demo mode), go straight to the dashboard
+  if (session) {
+    const dest = profile?.role === 'coach' ? '/coach/overview' : '/student/dashboard'
+    return <Navigate to={dest} replace />
+  }
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [loading, setLoading] = useState(false)
