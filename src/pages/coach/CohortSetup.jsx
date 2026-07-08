@@ -437,11 +437,12 @@ export default function CohortSetup() {
           </Card>
 
           <Card>
-            <h2 className="font-display text-xl text-atlantic-navy mb-4">
+            <h2 className="font-display text-xl text-atlantic-navy mb-1">
               Students <span className="text-denim text-base font-sans">({students.length})</span>
             </h2>
+            <p className="text-xs text-denim mb-4">The <strong>Code</strong> column is what each student uses to log in. If a student loses their code, you can find it here.</p>
             {students.length === 0 ? (
-              <p className="text-denim text-sm">No students enrolled yet.</p>
+              <p className="text-denim text-sm">No students enrolled yet. They'll appear here once they create an account on the login page.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -449,23 +450,33 @@ export default function CohortSetup() {
                     <tr className="border-b border-powder">
                       <th className="text-left py-2 pr-4 eyebrow">Name</th>
                       <th className="text-left py-2 pr-4 eyebrow">Email</th>
+                      <th className="text-left py-2 pr-4 eyebrow">Code</th>
                       <th className="text-left py-2 pr-4 eyebrow">Status</th>
                       <th className="text-left py-2 eyebrow">Group</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {students.map(s => (
-                      <tr key={s.id} className="border-b border-powder/50 hover:bg-powder/30 transition-colors">
-                        <td className="py-2.5 pr-4 font-medium text-classic-navy">{s.profiles?.full_name || '—'}</td>
-                        <td className="py-2.5 pr-4 text-denim">{s.profiles?.email}</td>
-                        <td className="py-2.5 pr-4">
-                          <Badge variant={s.status === 'active' ? 'success' : s.status === 'withdrawn' ? 'danger' : 'info'}>
-                            {s.status}
-                          </Badge>
-                        </td>
-                        <td className="py-2.5 text-denim">{s.peer_groups?.label || '—'}</td>
-                      </tr>
-                    ))}
+                    {students.map(s => {
+                      const studentCode = codes.find(c => c.email === s.profiles?.email)?.code
+                      return (
+                        <tr key={s.id} className="border-b border-powder/50 hover:bg-powder/30 transition-colors">
+                          <td className="py-2.5 pr-4 font-medium text-classic-navy">{s.profiles?.full_name || '—'}</td>
+                          <td className="py-2.5 pr-4 text-denim">{s.profiles?.email}</td>
+                          <td className="py-2.5 pr-4">
+                            {studentCode
+                              ? <span className="font-mono text-xs bg-powder px-2 py-1 rounded-lg text-classic-navy tracking-widest">{studentCode}</span>
+                              : <span className="text-denim/40 text-xs">—</span>
+                            }
+                          </td>
+                          <td className="py-2.5 pr-4">
+                            <Badge variant={s.status === 'active' ? 'success' : s.status === 'withdrawn' ? 'danger' : 'info'}>
+                              {s.status}
+                            </Badge>
+                          </td>
+                          <td className="py-2.5 text-denim">{s.peer_groups?.label || '—'}</td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
