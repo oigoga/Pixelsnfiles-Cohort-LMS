@@ -5,37 +5,81 @@ import { useAuth } from '../../context/AuthContext'
 
 export default function Login() {
   const { session, profile } = useAuth()
+  const [code, setCode] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  // If already signed in (or demo mode), go straight to the dashboard
+  // Already signed in → go to dashboard
   if (session) {
     const dest = profile?.role === 'coach' ? '/coach/overview' : '/student/dashboard'
     return <Navigate to={dest} replace />
   }
-  const [email, setEmail] = useState('')
-  const [sent, setSent] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
 
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
     setLoading(true)
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: window.location.origin },
-      })
-      if (error) setError(error.message || `Error ${error.status}: check Supabase config`)
-      else setSent(true)
-    } catch (e) {
-      setError(e.message || 'Could not reach Supabase — check environment variables')
+
+    const trimmed = code.trim().toUpperCase()
+
+    // 1. Validate the code server-side
+    const { data: result, error: rpcError } = await supabase.rpc('validate_access_code', {
+      p_code: trimmed,
+    })
+
+    if (rpcError || !result?.valid) {
+      setError(result?.error || 'Invalid access code. Check your code and try again.')
+      setLoading(false)
+      return
     }
+
+    const { email, full_name, role } = result
+
+    // 2. Try signing in (returning user)
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password: trimmed,
+    })
+
+    if (!signInError) {
+      // Existing user — enrol in cohort if student (idempotent)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (role === 'student' && user) {
+        await supabase.rpc('enroll_with_code', { p_code: trimmed, p_profile_id: user.id })
+      }
+      setLoading(false)
+      return
+    }
+
+    // 3. New user — sign up (no email confirmation needed; disable it in Supabase)
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password: trimmed,
+      options: {
+        data: { full_name, role },
+        emailRedirectTo: undefined,
+      },
+    })
+
+    if (signUpError) {
+      setError(signUpError.message || 'Could not create your account. Contact your coach.')
+      setLoading(false)
+      return
+    }
+
+    // Auto-enrol student in cohort
+    if (role === 'student' && signUpData?.user) {
+      await supabase.rpc('enroll_with_code', { p_code: trimmed, p_profile_id: signUpData.user.id })
+    }
+
     setLoading(false)
+    // AuthContext picks up the new session via onAuthStateChange
   }
 
   return (
-    <div className="min-h-screen bg-soft-butter flex items-center justify-center px-4">
+    <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-md">
+
         {/* Logo */}
         <div className="text-center mb-10">
           <div className="text-3xl font-sans font-bold tracking-[-0.04em] text-atlantic-navy mb-1">
@@ -44,54 +88,49 @@ export default function Login() {
           <p className="eyebrow mt-2">cohort learning platform</p>
         </div>
 
-        <div className="bg-whipped-cream rounded-2xl p-8 shadow-sm border border-powder">
-          {sent ? (
-            <div className="text-center">
-              <div className="text-4xl mb-4">✉️</div>
-              <h2 className="font-display text-2xl text-atlantic-navy mb-2">Check your email</h2>
-              <p className="text-denim text-sm leading-relaxed">
-                We sent a magic link to <strong className="text-classic-navy">{email}</strong>.
-                Click it to sign in — no password needed.
-              </p>
-              <button
-                onClick={() => setSent(false)}
-                className="mt-6 text-sm text-denim underline underline-offset-2"
-              >
-                Use a different email
-              </button>
+        <div className="bg-white rounded-2xl border border-powder shadow-sm p-8">
+          <h1 className="font-display text-3xl text-atlantic-navy mb-1">Enter your code</h1>
+          <p className="text-denim text-sm mb-6">
+            You received an access code when you enrolled. Enter it below to get in.
+          </p>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="eyebrow block mb-1.5">Access code</label>
+              <input
+                type="text"
+                required
+                value={code}
+                onChange={e => setCode(e.target.value.toUpperCase())}
+                placeholder="PNF-XXXXX"
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                className="w-full px-4 py-3 rounded-xl border border-powder bg-white text-classic-navy
+                           placeholder-denim/40 focus:outline-none focus:ring-2 focus:ring-atlantic-navy/30
+                           text-sm font-mono tracking-widest text-center"
+              />
             </div>
-          ) : (
-            <>
-              <h1 className="font-display text-3xl text-atlantic-navy mb-1">Welcome back</h1>
-              <p className="text-denim text-sm mb-6">Enter your email to receive a sign-in link.</p>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="eyebrow block mb-1.5">Email address</label>
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="w-full px-4 py-3 rounded-xl border border-powder bg-soft-butter text-classic-navy placeholder-denim/50 focus:outline-none focus:ring-2 focus:ring-atlantic-navy/30 text-sm"
-                  />
-                </div>
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            )}
 
-                {error && (
-                  <p className="text-red-600 text-sm">{error}</p>
-                )}
+            <button
+              type="submit"
+              disabled={loading || code.trim().length < 3}
+              className="w-full bg-atlantic-navy text-white font-medium py-3 px-6 rounded-xl
+                         hover:bg-classic-navy transition-colors text-sm disabled:opacity-50"
+            >
+              {loading ? 'Checking…' : 'Enter platform'}
+            </button>
+          </form>
 
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-atlantic-navy text-soft-butter font-medium py-3 px-6 rounded-xl hover:bg-classic-navy transition-colors text-sm disabled:opacity-60"
-                >
-                  {loading ? 'Sending…' : 'Send magic link'}
-                </button>
-              </form>
-            </>
-          )}
+          <p className="text-center text-xs text-denim mt-5">
+            Don't have a code? Your code is sent by the coach when you enrol.
+          </p>
         </div>
 
         <p className="text-center text-denim text-xs mt-6">

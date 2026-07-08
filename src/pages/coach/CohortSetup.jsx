@@ -7,12 +7,19 @@ import { Badge } from '../../components/ui/Badge'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { assignGroups } from '../../utils/groupAssignment'
 
+function genCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let out = 'PNF-'
+  for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)]
+  return out
+}
+
 export default function CohortSetup() {
   const [cohorts, setCohorts] = useState([])
   const [activeCohort, setActiveCohort] = useState(null)
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('cohort') // cohort | students | import
+  const [tab, setTab] = useState('cohort') // cohort | students | codes | import
   const fileRef = useRef()
 
   // New cohort form
@@ -20,7 +27,13 @@ export default function CohortSetup() {
   const [startDate, setStartDate] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // Enrol form
+  // Access codes
+  const [codes, setCodes] = useState([])
+  const [codeForm, setCodeForm] = useState({ full_name: '', email: '', role: 'student' })
+  const [creatingCode, setCreatingCode] = useState(false)
+  const [copiedId, setCopiedId] = useState(null)
+
+  // (legacy enrol form — kept for group-assign flow)
   const [enrolEmail, setEnrolEmail] = useState('')
   const [enrolName, setEnrolName] = useState('')
   const [enrolling, setEnrolling] = useState(false)
@@ -31,13 +44,57 @@ export default function CohortSetup() {
   const [importResult, setImportResult] = useState(null)
 
   useEffect(() => { loadCohorts() }, [])
-  useEffect(() => { if (activeCohort) loadStudents(activeCohort.id) }, [activeCohort])
+  useEffect(() => {
+    if (activeCohort) {
+      loadStudents(activeCohort.id)
+      loadCodes(activeCohort.id)
+    }
+  }, [activeCohort])
 
   async function loadCohorts() {
     const { data } = await supabase.from('cohorts').select('*').order('created_at', { ascending: false })
     setCohorts(data || [])
     if (data?.length) setActiveCohort(data[0])
     setLoading(false)
+  }
+
+  async function loadCodes(cohortId) {
+    const { data } = await supabase
+      .from('access_codes')
+      .select('*')
+      .eq('cohort_id', cohortId)
+      .order('created_at', { ascending: false })
+    setCodes(data || [])
+  }
+
+  async function createCode(e) {
+    e.preventDefault()
+    setCreatingCode(true)
+    const code = genCode()
+    const { error } = await supabase.from('access_codes').insert({
+      code,
+      full_name: codeForm.full_name.trim(),
+      email: codeForm.email.trim().toLowerCase(),
+      role: codeForm.role,
+      cohort_id: activeCohort.id,
+    })
+    setCreatingCode(false)
+    if (!error) {
+      setCodeForm({ full_name: '', email: '', role: 'student' })
+      await loadCodes(activeCohort.id)
+    }
+  }
+
+  async function copyCode(code, id) {
+    await navigator.clipboard.writeText(code)
+    setCopiedId(id)
+    setTimeout(() => setCopiedId(null), 2000)
+  }
+
+  async function deleteCode(id) {
+    if (!confirm('Delete this access code? The student will no longer be able to use it.')) return
+    await supabase.from('access_codes').delete().eq('id', id)
+    setCodes(prev => prev.filter(c => c.id !== id))
   }
 
   async function loadStudents(cohortId) {
@@ -273,15 +330,20 @@ export default function CohortSetup() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-powder">
-        {['cohort', 'students', 'import'].map(t => (
+        {[
+          { key: 'cohort', label: 'Cohort' },
+          { key: 'students', label: 'Students' },
+          { key: 'codes', label: 'Access Codes' },
+          { key: 'import', label: 'Import Tasks' },
+        ].map(t => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors capitalize ${
-              tab === t ? 'border-atlantic-navy text-atlantic-navy' : 'border-transparent text-denim'
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === t.key ? 'border-atlantic-navy text-atlantic-navy' : 'border-transparent text-denim'
             }`}
           >
-            {t === 'import' ? 'Import Tasks' : t === 'cohort' ? 'Cohort' : 'Students'}
+            {t.label}
           </button>
         ))}
       </div>
@@ -371,7 +433,7 @@ export default function CohortSetup() {
               </div>
               <Button type="submit" disabled={enrolling}>{enrolling ? 'Enrolling…' : 'Enrol student'}</Button>
             </form>
-            <p className="text-xs text-denim mt-3">Students sign in via the magic link on the login page using their email address.</p>
+            <p className="text-xs text-denim mt-3">Tip: use the <button onClick={() => setTab('codes')} className="underline">Access Codes tab</button> to generate a login code and send it to the student.</p>
           </Card>
 
           <Card>
@@ -402,6 +464,107 @@ export default function CohortSetup() {
                           </Badge>
                         </td>
                         <td className="py-2.5 text-denim">{s.peer_groups?.label || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {/* ── ACCESS CODES TAB ── */}
+      {tab === 'codes' && activeCohort && (
+        <div className="space-y-6">
+          <Card>
+            <h2 className="font-display text-xl text-atlantic-navy mb-1">Generate access code</h2>
+            <p className="text-sm text-denim mb-4">
+              Each student gets a unique code. Send it to them — they enter it on the login page to join the platform.
+            </p>
+            <form onSubmit={createCode} className="flex flex-wrap gap-3 items-end">
+              <div className="flex-1 min-w-44">
+                <label className="eyebrow block mb-1">Full name</label>
+                <input
+                  required
+                  value={codeForm.full_name}
+                  onChange={e => setCodeForm(f => ({ ...f, full_name: e.target.value }))}
+                  placeholder="Ada Lovelace"
+                  className="input-field"
+                />
+              </div>
+              <div className="flex-1 min-w-44">
+                <label className="eyebrow block mb-1">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={codeForm.email}
+                  onChange={e => setCodeForm(f => ({ ...f, email: e.target.value }))}
+                  placeholder="ada@example.com"
+                  className="input-field"
+                />
+              </div>
+              <div className="min-w-32">
+                <label className="eyebrow block mb-1">Role</label>
+                <select
+                  value={codeForm.role}
+                  onChange={e => setCodeForm(f => ({ ...f, role: e.target.value }))}
+                  className="input-field"
+                >
+                  <option value="student">Student</option>
+                  <option value="coach">Coach</option>
+                </select>
+              </div>
+              <Button type="submit" disabled={creatingCode}>
+                {creatingCode ? 'Generating…' : 'Generate code'}
+              </Button>
+            </form>
+          </Card>
+
+          <Card>
+            <h2 className="font-display text-xl text-atlantic-navy mb-4">
+              Codes for {activeCohort.name}
+              <span className="text-denim text-base font-sans ml-2">({codes.length})</span>
+            </h2>
+            {codes.length === 0 ? (
+              <p className="text-denim text-sm">No codes generated yet. Add one above.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-powder">
+                      <th className="text-left py-2 pr-4 eyebrow">Name</th>
+                      <th className="text-left py-2 pr-4 eyebrow">Email</th>
+                      <th className="text-left py-2 pr-4 eyebrow">Role</th>
+                      <th className="text-left py-2 pr-4 eyebrow">Code</th>
+                      <th className="py-2 eyebrow"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {codes.map(c => (
+                      <tr key={c.id} className="border-b border-powder/50 hover:bg-powder/30 transition-colors">
+                        <td className="py-2.5 pr-4 font-medium text-classic-navy">{c.full_name}</td>
+                        <td className="py-2.5 pr-4 text-denim">{c.email}</td>
+                        <td className="py-2.5 pr-4">
+                          <Badge variant={c.role === 'coach' ? 'honeycomb' : 'info'}>{c.role}</Badge>
+                        </td>
+                        <td className="py-2.5 pr-4 font-mono text-classic-navy tracking-widest">{c.code}</td>
+                        <td className="py-2.5 text-right">
+                          <div className="flex items-center gap-2 justify-end">
+                            <button
+                              onClick={() => copyCode(c.code, c.id)}
+                              className="text-xs px-3 py-1 rounded-lg border border-powder text-denim hover:border-denim transition-colors"
+                            >
+                              {copiedId === c.id ? 'Copied!' : 'Copy'}
+                            </button>
+                            <button
+                              onClick={() => deleteCode(c.id)}
+                              className="text-xs px-3 py-1 rounded-lg border border-red-200 text-red-500 hover:border-red-400 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
