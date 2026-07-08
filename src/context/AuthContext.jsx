@@ -3,64 +3,65 @@ import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
-// ── DEMO MODE ──────────────────────────────────────────────────
-// Set to 'coach' or 'student' to bypass login and explore the UI.
-// Set to null to re-enable real auth.
-const DEMO_ROLE = 'coach'
-// ───────────────────────────────────────────────────────────────
-
-const DEMO_PROFILE = {
-  id: 'demo-user',
-  role: DEMO_ROLE,
-  full_name: 'Goga (Demo)',
-  email: 'gogaelisabeth21@gmail.com',
-}
+const SESSION_KEY = 'pnf_session'
 
 export function AuthProvider({ children }) {
-  const [session, setSession] = useState(undefined)
   const [profile, setProfile] = useState(null)
+  const [loading, setLoading]  = useState(true)
 
+  // On mount: restore session from localStorage (like VA Skills Map)
   useEffect(() => {
-    if (DEMO_ROLE) {
-      setSession({ user: DEMO_PROFILE })
-      setProfile(DEMO_PROFILE)
-      return
-    }
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      if (session) fetchProfile(session.user.id)
-    })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      if (session) fetchProfile(session.user.id)
-      else setProfile(null)
-    })
-
-    return () => subscription.unsubscribe()
+    try {
+      const raw = localStorage.getItem(SESSION_KEY)
+      if (raw) setProfile(JSON.parse(raw))
+    } catch (_) {}
+    setLoading(false)
   }, [])
 
-  async function fetchProfile(userId) {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-    setProfile(data)
+  async function signInWithCode(code) {
+    const { data, error } = await supabase.rpc('login_with_code', {
+      p_code: code.trim().toUpperCase(),
+    })
+
+    if (error || !data?.valid) {
+      return { error: data?.error || 'Invalid access code. Check your code and try again.' }
+    }
+
+    const newProfile = {
+      id:        data.id,
+      code:      code.trim().toUpperCase(),
+      full_name: data.full_name,
+      email:     data.email,
+      role:      data.role,
+      cohort_id: data.cohort_id,
+    }
+
+    localStorage.setItem(SESSION_KEY, JSON.stringify(newProfile))
+    setProfile(newProfile)
+    return { error: null }
   }
 
-  const value = {
-    session,
-    profile,
-    loading: session === undefined,
-    isCoach: profile?.role === 'coach',
-    isStudent: profile?.role === 'student',
-    signOut: DEMO_ROLE ? () => {} : () => supabase.auth.signOut(),
-    refreshProfile: () => session && !DEMO_ROLE && fetchProfile(session.user.id),
+  function signOut() {
+    localStorage.removeItem(SESSION_KEY)
+    setProfile(null)
   }
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  // `session` is truthy when logged in — ProtectedRoute checks this
+  const session = profile ? { user: profile } : null
+
+  return (
+    <AuthContext.Provider value={{
+      session,
+      profile,
+      loading,
+      isCoach:   profile?.role === 'coach',
+      isStudent: profile?.role === 'student',
+      signInWithCode,
+      signOut,
+    }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {

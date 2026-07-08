@@ -1,13 +1,12 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 
 export default function Login() {
-  const { session, profile } = useAuth()
-  const [code, setCode] = useState('')
+  const { session, profile, signInWithCode } = useAuth()
+  const [code, setCode]     = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError]   = useState('')
 
   // Already signed in → go to dashboard
   if (session) {
@@ -19,61 +18,10 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setLoading(true)
-
-    const trimmed = code.trim().toUpperCase()
-
-    // 1. Validate the code server-side
-    const { data: result, error: rpcError } = await supabase.rpc('validate_access_code', {
-      p_code: trimmed,
-    })
-
-    if (rpcError || !result?.valid) {
-      setError(result?.error || 'Invalid access code. Check your code and try again.')
-      setLoading(false)
-      return
-    }
-
-    const { email, full_name, role } = result
-
-    // 2. Try signing in (returning user)
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password: trimmed,
-    })
-
-    if (!signInError) {
-      // Existing user — enrol in cohort if student (idempotent)
-      const { data: { user } } = await supabase.auth.getUser()
-      if (role === 'student' && user) {
-        await supabase.rpc('enroll_with_code', { p_code: trimmed, p_profile_id: user.id })
-      }
-      setLoading(false)
-      return
-    }
-
-    // 3. New user — sign up (no email confirmation needed; disable it in Supabase)
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password: trimmed,
-      options: {
-        data: { full_name, role },
-        emailRedirectTo: undefined,
-      },
-    })
-
-    if (signUpError) {
-      setError(signUpError.message || 'Could not create your account. Contact your coach.')
-      setLoading(false)
-      return
-    }
-
-    // Auto-enrol student in cohort
-    if (role === 'student' && signUpData?.user) {
-      await supabase.rpc('enroll_with_code', { p_code: trimmed, p_profile_id: signUpData.user.id })
-    }
-
+    const { error: err } = await signInWithCode(code)
     setLoading(false)
-    // AuthContext picks up the new session via onAuthStateChange
+    if (err) setError(err)
+    // On success, profile state updates → Navigate above fires automatically
   }
 
   return (
@@ -129,7 +77,7 @@ export default function Login() {
           </form>
 
           <p className="text-center text-xs text-denim mt-5">
-            Don't have a code? Your code is sent by the coach when you enrol.
+            Don't have a code? Your coach sends it when you enrol.
           </p>
         </div>
 
