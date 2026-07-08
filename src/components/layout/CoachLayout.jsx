@@ -14,7 +14,7 @@ export default function CoachLayout() {
   const { profile, signOut } = useAuth()
 
   return (
-    <div className="min-h-screen bg-soft-butter flex flex-col">
+    <div className="min-h-screen flex flex-col">
       <header className="bg-atlantic-navy text-soft-butter px-6 py-3 flex items-center justify-between">
         <div className="font-sans font-bold text-xl tracking-[-0.04em]">
           pixelsn<span className="text-honeycomb">f</span>iles<span className="text-honeycomb">.</span>
@@ -34,7 +34,7 @@ export default function CoachLayout() {
 
       {/* Sidebar layout on md+ */}
       <div className="flex flex-1">
-        <aside className="hidden md:flex flex-col w-52 bg-whipped-cream border-r border-powder py-6 px-3 gap-1 shrink-0">
+        <aside className="hidden md:flex flex-col w-52 bg-white/80 backdrop-blur-sm border-r border-powder py-6 px-3 gap-1 shrink-0">
           {navItems.map(item => (
             <NavLink
               key={item.to}
@@ -54,7 +54,7 @@ export default function CoachLayout() {
 
         {/* Mobile nav bar */}
         <div className="flex flex-col flex-1 min-w-0">
-          <nav className="md:hidden bg-whipped-cream border-b border-powder flex overflow-x-auto">
+          <nav className="md:hidden bg-white/80 backdrop-blur-sm border-b border-powder flex overflow-x-auto">
             {navItems.map(item => (
               <NavLink
                 key={item.to}

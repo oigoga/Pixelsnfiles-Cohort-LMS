@@ -6,7 +6,13 @@
 
 @layer base {
   body {
-    @apply bg-soft-butter text-classic-navy font-sans m-0;
+    @apply text-classic-navy font-sans m-0;
+    background-color: #ffffff;
+    background-image:
+      linear-gradient(rgba(215, 222, 232, 0.5) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(215, 222, 232, 0.5) 1px, transparent 1px);
+    background-size: 32px 32px;
+    min-height: 100vh;
   }
 }
 
@@ -16,7 +22,7 @@
   }
 
   .input-field {
-    @apply w-full px-4 py-2.5 rounded-xl border border-powder bg-soft-butter text-classic-navy
+    @apply w-full px-4 py-2.5 rounded-xl border border-powder bg-white text-classic-navy
            placeholder-denim/50 focus:outline-none focus:ring-2 focus:ring-atlantic-navy/30 text-sm
            transition-colors;
   }

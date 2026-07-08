@@ -4,7 +4,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        'soft-butter':    '#F4E4B8',
+        'soft-butter':    '#ffffff',
         'atlantic-navy':  '#2F4A6B',
         'denim':          '#4F6B8A',
         'whipped-cream':  '#F8EFD8',
