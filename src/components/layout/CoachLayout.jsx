@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { Logo } from '../ui/Logo'
 
 const navItems = [
   { to: '/coach/overview', label: 'Overview' },
@@ -16,9 +17,9 @@ export default function CoachLayout() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="bg-atlantic-navy text-soft-butter px-6 py-3 flex items-center justify-between">
-        <div className="font-sans font-bold text-xl tracking-[-0.04em]">
-          pixelsn<span className="text-honeycomb">f</span>iles<span className="text-honeycomb">.</span>
-          <span className="ml-3 text-xs font-normal text-powder/70 tracking-widest uppercase">Coach</span>
+        <div className="flex items-center gap-3">
+          <Logo size="md" theme="light" />
+          <span className="text-xs font-normal text-powder/70 tracking-widest uppercase">Coach</span>
         </div>
 
         <div className="flex items-center gap-3">

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { Logo } from '../../components/ui/Logo'
 
 // Generates a personal code: first 5 letters of name + 4 digits
 // e.g. "Sarah Jones" → SARAH-4829
@@ -81,9 +82,7 @@ export default function Login() {
 
         {/* Logo */}
         <div className="text-center mb-10">
-          <div className="text-3xl font-sans font-bold tracking-[-0.04em] text-atlantic-navy mb-1">
-            pixelsn<span className="text-honeycomb">f</span>iles<span className="text-honeycomb">.</span>
-          </div>
+          <Logo size="xl" theme="dark" />
           <p className="eyebrow mt-2">cohort learning platform</p>
         </div>
 

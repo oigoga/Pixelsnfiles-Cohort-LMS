@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { Logo } from '../ui/Logo'
 
 const navItems = [
   { to: '/student/dashboard', label: 'Dashboard' },
@@ -16,9 +17,7 @@ export default function StudentLayout() {
     <div className="min-h-screen flex flex-col">
       {/* Top nav */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-powder px-6 py-3 flex items-center justify-between sticky top-0 z-10">
-        <div className="font-sans font-bold text-xl tracking-[-0.04em] text-atlantic-navy">
-          pixelsn<span className="text-honeycomb">f</span>iles<span className="text-honeycomb">.</span>
-        </div>
+        <Logo size="md" theme="dark" />
 
         <nav className="hidden md:flex items-center gap-1">
           {navItems.map(item => (
