@@ -12,6 +12,7 @@ import ModuleView from './pages/student/ModuleView'
 import TaskView from './pages/student/TaskView'
 import PeerReviewQueue from './pages/student/PeerReviewQueue'
 import GroupHub from './pages/student/GroupHub'
+import Announcements from './pages/student/Announcements'
 
 // Coach pages
 import OverviewBoard from './pages/coach/OverviewBoard'
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="dashboard" element={<StudentDashboard />} />
             <Route path="module/:moduleId" element={<ModuleView />} />
             <Route path="task/:taskId" element={<TaskView />} />
+            <Route path="announcements" element={<Announcements />} />
             <Route path="review" element={<PeerReviewQueue />} />
             <Route path="group" element={<GroupHub />} />
           </Route>

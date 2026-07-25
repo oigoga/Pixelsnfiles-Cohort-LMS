@@ -17,6 +17,7 @@ export default function ModuleView() {
   const [resources, setResources] = useState([])
   const [tasks, setTasks] = useState([])
   const [submissions, setSubmissions] = useState({})
+  const [pinnedAnnouncements, setPinnedAnnouncements] = useState([])
 
   useEffect(() => { load() }, [moduleId])
 
@@ -31,6 +32,17 @@ export default function ModuleView() {
     setResources(resRes.data || [])
     const taskList = taskRes.data || []
     setTasks(taskList)
+
+    // Pinned announcements for this cohort
+    if (modRes.data?.cohort_id) {
+      const { data: anns } = await supabase
+        .from('announcements')
+        .select('*')
+        .eq('cohort_id', modRes.data.cohort_id)
+        .eq('pinned', true)
+        .order('created_at', { ascending: false })
+      setPinnedAnnouncements(anns || [])
+    }
 
     // Load my submissions for these tasks
     if (taskList.length && profile) {
@@ -63,6 +75,25 @@ export default function ModuleView() {
         <p className="eyebrow mt-2">Week {mod.week_number}</p>
         <h1 className="font-display text-4xl text-atlantic-navy mt-1">{mod.title}</h1>
       </div>
+
+      {/* Pinned announcements */}
+      {pinnedAnnouncements.map(a => (
+        <div key={a.id} className="bg-honeycomb/10 border border-honeycomb/40 rounded-2xl px-6 py-4">
+          <div className="flex items-start gap-3">
+            <span className="text-honeycomb font-bold text-lg mt-0.5 shrink-0">📌</span>
+            <div>
+              <p className="font-semibold text-classic-navy text-sm">{a.title}</p>
+              <p className="text-denim text-sm mt-1 whitespace-pre-line">{a.body}</p>
+              {a.link && (
+                <a href={a.link} target="_blank" rel="noreferrer"
+                  className="text-atlantic-navy text-sm underline mt-1 block">
+                  View link →
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
 
       <div className="grid md:grid-cols-[1fr,280px] gap-6">
         <div className="space-y-6">
