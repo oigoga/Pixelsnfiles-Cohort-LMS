@@ -13,6 +13,7 @@ import TaskView from './pages/student/TaskView'
 import PeerReviewQueue from './pages/student/PeerReviewQueue'
 import GroupHub from './pages/student/GroupHub'
 import Announcements from './pages/student/Announcements'
+import Leaderboard from './pages/Leaderboard'
 
 // Coach pages
 import OverviewBoard from './pages/coach/OverviewBoard'
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="module/:moduleId" element={<ModuleView />} />
             <Route path="task/:taskId" element={<TaskView />} />
             <Route path="announcements" element={<Announcements />} />
+            <Route path="leaderboard" element={<Leaderboard />} />
             <Route path="review" element={<PeerReviewQueue />} />
             <Route path="group" element={<GroupHub />} />
           </Route>
@@ -64,6 +66,7 @@ export default function App() {
             <Route path="verify" element={<VerificationQueue />} />
             <Route path="modules" element={<ModuleManager />} />
             <Route path="announcements" element={<AnnouncementsManager />} />
+            <Route path="leaderboard" element={<Leaderboard />} />
             <Route path="cohort" element={<CohortSetup />} />
           </Route>
 

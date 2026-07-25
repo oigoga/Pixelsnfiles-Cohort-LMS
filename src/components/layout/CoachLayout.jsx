@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext'
 
 const navItems = [
   { to: '/coach/overview', label: 'Overview' },
-  { to: '/coach/risk', label: 'Risk Board' },
+  { to: '/coach/leaderboard', label: 'Leaderboard' },
   { to: '/coach/verify', label: 'Verify Queue' },
   { to: '/coach/modules', label: 'Modules' },
   { to: '/coach/cohort', label: 'Cohort Setup' },
