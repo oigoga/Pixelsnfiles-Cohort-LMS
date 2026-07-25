@@ -9,6 +9,18 @@ import { Spinner } from '../../components/ui/Spinner'
 
 const resourceIcons = { video: '🎥', doc: '📄', link: '🔗' }
 
+const TRACK = {
+  AO: { label: 'Admin & Ops',  bg: '#dbeafe', color: '#1d4ed8', emoji: '⚙️' },
+  MK: { label: 'Marketing',    bg: '#ede9fe', color: '#6d28d9', emoji: '📣' },
+  DS: { label: 'Design',       bg: '#fef3c7', color: '#92400e', emoji: '🎨' },
+  GH: { label: 'Get Hired',    bg: '#d1fae5', color: '#065f46', emoji: '🚀' },
+}
+
+function getTrack(title) {
+  const m = title?.match(/^(AO|MK|DS|GH)-/)
+  return m ? TRACK[m[1]] : null
+}
+
 export default function ModuleView() {
   const { moduleId } = useParams()
   const { profile } = useAuth()
@@ -115,17 +127,22 @@ export default function ModuleView() {
                   <Link
                     key={task.id}
                     to={`/student/task/${task.id}`}
-                    className="block bg-whipped-cream border border-powder rounded-2xl p-4 hover:border-denim transition-colors"
+                    className="block bg-white border border-powder rounded-2xl p-4 hover:border-denim hover:shadow-sm transition-all"
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex-1">
-                        <div className="flex flex-wrap gap-2 mb-1">
-                          <Badge variant={task.type === 'team' ? 'honeycomb' : 'default'}>{task.type}</Badge>
-                          {task.requires_coach_verification && <Badge variant="info">Milestone</Badge>}
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {(() => { const t = getTrack(task.title); return t ? (
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: t.bg, color: t.color }}>
+                              {t.emoji} {t.label}
+                            </span>
+                          ) : null })()}
+                          {task.type === 'team' && <Badge variant="honeycomb">Team task</Badge>}
+                          {task.requires_coach_verification && <Badge variant="info">⭐ Milestone</Badge>}
                         </div>
-                        <p className="font-medium text-classic-navy text-sm">{task.title}</p>
+                        <p className="font-semibold text-classic-navy text-sm">{task.title}</p>
                         {task.due_date && (
-                          <p className="text-xs text-denim mt-1">Due {task.due_date}</p>
+                          <p className="text-xs text-denim mt-1">📅 Due {task.due_date}</p>
                         )}
                       </div>
                       <StatusBadge status={sub?.status || 'not_started'} />

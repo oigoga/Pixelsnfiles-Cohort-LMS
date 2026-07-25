@@ -8,6 +8,17 @@ import { Badge } from '../../components/ui/Badge'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { Spinner } from '../../components/ui/Spinner'
 
+const TRACK = {
+  AO: { label: 'Admin & Ops',  bg: '#dbeafe', color: '#1d4ed8', emoji: '⚙️' },
+  MK: { label: 'Marketing',    bg: '#ede9fe', color: '#6d28d9', emoji: '📣' },
+  DS: { label: 'Design',       bg: '#fef3c7', color: '#92400e', emoji: '🎨' },
+  GH: { label: 'Get Hired',    bg: '#d1fae5', color: '#065f46', emoji: '🚀' },
+}
+function getTrack(title) {
+  const m = title?.match(/^(AO|MK|DS|GH)-/)
+  return m ? TRACK[m[1]] : null
+}
+
 export default function TaskView() {
   const { taskId } = useParams()
   const { profile } = useAuth()
@@ -120,6 +131,7 @@ export default function TaskView() {
 
   const canSubmit = !submission || submission.status === 'needs_rework'
   const mod = task.modules
+  const track = getTrack(task.title)
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -128,28 +140,34 @@ export default function TaskView() {
           ← {mod?.title || 'Module'}
         </Link>
         <div className="flex flex-wrap gap-2 mt-3">
-          <Badge variant={task.type === 'team' ? 'honeycomb' : 'default'}>{task.type}</Badge>
-          {task.requires_coach_verification && <Badge variant="info">Milestone</Badge>}
+          {track && (
+            <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: track.bg, color: track.color }}>
+              {track.emoji} {track.label}
+            </span>
+          )}
+          {task.type === 'team' && <Badge variant="honeycomb">Team task</Badge>}
+          {task.requires_coach_verification && <Badge variant="info">⭐ Milestone</Badge>}
           {submission && <StatusBadge status={submission.status} />}
         </div>
         <h1 className="font-display text-3xl text-atlantic-navy mt-2">{task.title}</h1>
-        {task.due_date && <p className="text-sm text-denim mt-1">Due {task.due_date}</p>}
+        {task.due_date && <p className="text-sm text-denim mt-1">📅 Due {task.due_date}</p>}
       </div>
 
       {/* Instructions */}
       <Card>
-        <h2 className="font-display text-xl text-atlantic-navy mb-3">Instructions</h2>
+        <h2 className="font-display text-xl text-atlantic-navy mb-3">Here's what you're building</h2>
         <p className="text-denim text-sm leading-relaxed whitespace-pre-line">{task.instructions}</p>
       </Card>
 
       {/* Definition of done */}
       {task.definition_of_done?.length > 0 && (
         <Card>
-          <h2 className="font-display text-xl text-atlantic-navy mb-3">Definition of done</h2>
-          <ul className="space-y-2">
+          <h2 className="font-display text-xl text-atlantic-navy mb-1">You're done when…</h2>
+          <p className="text-xs text-denim mb-4">Every box needs to be true before you submit. No skipping.</p>
+          <ul className="space-y-2.5">
             {task.definition_of_done.map((item, i) => (
-              <li key={i} className="flex items-start gap-3 text-sm text-denim">
-                <span className="mt-0.5 text-honeycomb font-bold">✓</span>
+              <li key={i} className="flex items-start gap-3 text-sm text-denim bg-powder/40 rounded-xl px-4 py-2.5">
+                <span className="mt-0.5 text-honeycomb font-bold shrink-0">✓</span>
                 {item}
               </li>
             ))}
