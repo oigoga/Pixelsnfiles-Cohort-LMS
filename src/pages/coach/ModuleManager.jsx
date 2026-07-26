@@ -290,7 +290,7 @@ export default function ModuleManager() {
 
                   <div>
                     <label className="eyebrow block mb-1">Instructions</label>
-                    <textarea rows={5} value={taskForm.instructions} onChange={e => setTaskForm(p => ({ ...p, instructions: e.target.value }))} className="input-field resize-y" placeholder="What students need to do, step by step…" />
+                    <textarea rows={16} value={taskForm.instructions} onChange={e => setTaskForm(p => ({ ...p, instructions: e.target.value }))} className="input-field resize-y font-mono text-xs leading-relaxed" placeholder="What students need to do, step by step…" />
                   </div>
 
                   <div className="flex gap-4 flex-wrap items-end">

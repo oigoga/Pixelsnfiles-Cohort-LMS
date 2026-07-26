@@ -174,16 +174,11 @@ export default function StudentDashboard() {
         <div className="space-y-3">
           {modules.map(mod => {
             const isCurrentWeek = mod.week_number === currentWeek
-            const isUnlocked = mod.week_number <= currentWeek
             return (
-              <div
+              <Link
                 key={mod.id}
-                className={`flex items-center gap-4 p-4 rounded-2xl border transition-colors ${
-                  isUnlocked
-                    ? 'bg-whipped-cream border-powder hover:border-denim cursor-pointer'
-                    : 'bg-powder/30 border-powder/50 opacity-60 cursor-not-allowed'
-                }`}
-                onClick={() => isUnlocked && (window.location.href = `/student/module/${mod.id}`)}
+                to={`/student/module/${mod.id}`}
+                className="flex items-center gap-4 p-4 rounded-2xl border bg-whipped-cream border-powder hover:border-denim transition-colors"
               >
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-display text-lg font-medium ${
                   isCurrentWeek ? 'bg-atlantic-navy text-soft-butter' : 'bg-powder text-denim'
@@ -194,12 +189,8 @@ export default function StudentDashboard() {
                   <p className="font-medium text-classic-navy text-sm">{mod.title}</p>
                   {isCurrentWeek && <p className="text-xs text-honeycomb font-medium mt-0.5">Current week</p>}
                 </div>
-                {isUnlocked ? (
-                  <span className="text-denim text-sm">→</span>
-                ) : (
-                  <span className="text-xs text-denim">Locked</span>
-                )}
-              </div>
+                <span className="text-denim text-sm">→</span>
+              </Link>
             )
           })}
         </div>
