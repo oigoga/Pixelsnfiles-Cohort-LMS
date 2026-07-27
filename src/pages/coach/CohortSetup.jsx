@@ -175,26 +175,27 @@ export default function CohortSetup() {
     setEnrolling(false)
   }
 
-  async function closeRegistrationAndAssign() {
-    if (!confirm('Close registration and auto-assign peer groups? This cannot be undone.')) return
+  async function handleAssignGroups() {
+    if (!confirm('Auto-assign peer groups? Any existing group assignments will be replaced.')) return
 
-    const enrolled = students.filter(s => s.status === 'enrolled')
-    if (enrolled.length < 3) {
-      alert('Need at least 3 enrolled students to assign groups.')
+    const enrolled = students.filter(s => s.status === 'enrolled' || s.status === 'active')
+    if (enrolled.length < 2) {
+      alert('Need at least 2 enrolled students to assign groups.')
       return
     }
+
+    // Clear existing groups for this cohort first
+    await supabase.from('peer_groups').delete().eq('cohort_id', activeCohort.id)
 
     const groups = assignGroups(enrolled)
 
     for (let i = 0; i < groups.length; i++) {
-      // Create peer group
       const { data: pg } = await supabase
         .from('peer_groups')
         .insert({ cohort_id: activeCohort.id, label: `Group ${i + 1}` })
         .select()
         .single()
 
-      // Assign each student
       for (const student of groups[i]) {
         await supabase
           .from('students')
@@ -203,9 +204,6 @@ export default function CohortSetup() {
       }
     }
 
-    // Update cohort status
-    await supabase.from('cohorts').update({ status: 'active' }).eq('id', activeCohort.id)
-    setActiveCohort(prev => ({ ...prev, status: 'active' }))
     await loadStudents(activeCohort.id)
   }
 
@@ -401,15 +399,13 @@ export default function CohortSetup() {
                 </div>
               </div>
 
-              {activeCohort.status === 'open' || activeCohort.status === 'closed' ? (
-                <Button
-                  variant="danger"
-                  className="mt-5 w-full"
-                  onClick={closeRegistrationAndAssign}
-                >
-                  Close registration & assign groups
-                </Button>
-              ) : null}
+              <Button
+                variant="secondary"
+                className="mt-5 w-full"
+                onClick={handleAssignGroups}
+              >
+                Assign groups
+              </Button>
             </Card>
           )}
         </div>
