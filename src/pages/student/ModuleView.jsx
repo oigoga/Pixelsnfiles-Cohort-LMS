@@ -85,7 +85,7 @@ export default function ModuleView() {
       <div>
         <Link to="/student/dashboard" className="text-sm text-denim hover:text-atlantic-navy">← Dashboard</Link>
         <p className="eyebrow mt-2">Week {mod.week_number}</p>
-        <h1 className="font-display text-4xl text-atlantic-navy mt-1">{mod.title}</h1>
+        <h1 className="font-display text-4xl font-bold text-atlantic-navy mt-1">{mod.title}</h1>
       </div>
 
       {/* Pinned announcements */}
@@ -94,8 +94,8 @@ export default function ModuleView() {
           <div className="flex items-start gap-3">
             <span className="text-honeycomb font-bold text-lg mt-0.5 shrink-0">📌</span>
             <div>
-              <p className="font-semibold text-classic-navy text-sm">{a.title}</p>
-              <p className="text-denim text-sm mt-1 whitespace-pre-line">{a.body}</p>
+              <p className="font-bold text-classic-navy">{a.title}</p>
+              <p className="text-denim text-base mt-1 whitespace-pre-line leading-relaxed">{a.body}</p>
               {a.link && (
                 <a href={a.link} target="_blank" rel="noreferrer"
                   className="text-atlantic-navy text-sm underline mt-1 block">
@@ -107,92 +107,76 @@ export default function ModuleView() {
         </div>
       ))}
 
-      <div className="grid md:grid-cols-[1fr,280px] gap-6">
-        <div className="space-y-6">
-          {/* Overview */}
-          {mod.overview && (
-            <Card>
-              <h2 className="font-display text-2xl text-atlantic-navy mb-3">Overview</h2>
-              <p className="text-denim text-sm leading-relaxed whitespace-pre-line">{mod.overview}</p>
-            </Card>
-          )}
-
-          {/* Tasks */}
-          <div>
-            <h2 className="font-display text-2xl text-atlantic-navy mb-3">Tasks</h2>
-            <div className="space-y-3">
-              {tasks.map(task => {
-                const sub = submissions[task.id]
-                return (
-                  <Link
-                    key={task.id}
-                    to={`/student/task/${task.id}`}
-                    className="block bg-white border border-powder rounded-2xl p-4 hover:border-denim hover:shadow-sm transition-all"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1">
-                        <div className="flex flex-wrap gap-2 mb-2">
-                          {(() => { const t = getTrack(task.title); return t ? (
-                            <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: t.bg, color: t.color }}>
-                              {t.emoji} {t.label}
-                            </span>
-                          ) : null })()}
-                          {task.type === 'team' && <Badge variant="honeycomb">Team task</Badge>}
-                          {task.requires_coach_verification && <Badge variant="info">⭐ Milestone</Badge>}
-                        </div>
-                        <p className="font-semibold text-classic-navy text-sm">{task.title}</p>
-                        {task.due_date && (
-                          <p className="text-xs text-denim mt-1">📅 Due {task.due_date}</p>
-                        )}
-                      </div>
-                      <StatusBadge status={sub?.status || 'not_started'} />
-                    </div>
-                  </Link>
-                )
-              })}
-              {tasks.length === 0 && <p className="text-denim text-sm">No tasks for this module yet.</p>}
-            </div>
-          </div>
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-4">
-          {/* Recording */}
+      {/* Recording + Resources — horizontal strip */}
+      {(mod.session_recording_url || resources.length > 0) && (
+        <div className="flex flex-wrap gap-3">
           {mod.session_recording_url && (
-            <Card>
-              <p className="eyebrow mb-2">Session recording</p>
-              <a
-                href={mod.session_recording_url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-2 text-sm text-atlantic-navy hover:underline font-medium"
-              >
-                🎥 Watch recording →
-              </a>
-            </Card>
+            <a
+              href={mod.session_recording_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 bg-atlantic-navy/5 border border-atlantic-navy/20 rounded-xl px-4 py-2.5 text-sm font-semibold text-atlantic-navy hover:bg-atlantic-navy/10 transition-colors"
+            >
+              🎥 Session recording
+            </a>
           )}
+          {resources.map(r => (
+            <a
+              key={r.id}
+              href={r.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 bg-white border border-powder rounded-xl px-4 py-2.5 text-sm font-medium text-atlantic-navy hover:border-denim hover:shadow-sm transition-all"
+            >
+              <span>{resourceIcons[r.type] || '🔗'}</span>
+              <span>{r.label}</span>
+            </a>
+          ))}
+        </div>
+      )}
 
-          {/* Resources */}
-          {resources.length > 0 && (
-            <Card>
-              <p className="eyebrow mb-3">Resources</p>
-              <ul className="space-y-2">
-                {resources.map(r => (
-                  <li key={r.id}>
-                    <a
-                      href={r.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-start gap-2 text-sm text-atlantic-navy hover:underline"
-                    >
-                      <span>{resourceIcons[r.type] || '🔗'}</span>
-                      <span>{r.label}</span>
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          )}
+      {/* Overview */}
+      {mod.overview && (
+        <Card>
+          <h2 className="font-display text-2xl font-bold text-atlantic-navy mb-3">Overview</h2>
+          <p className="text-classic-navy text-base leading-relaxed whitespace-pre-line">{mod.overview}</p>
+        </Card>
+      )}
+
+      {/* Tasks */}
+      <div>
+        <h2 className="font-display text-2xl font-bold text-atlantic-navy mb-4">Tasks</h2>
+        <div className="space-y-3">
+          {tasks.map(task => {
+            const sub = submissions[task.id]
+            return (
+              <Link
+                key={task.id}
+                to={`/student/task/${task.id}`}
+                className="block bg-white border border-powder rounded-2xl p-5 hover:border-denim hover:shadow-sm transition-all"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="flex-1">
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {(() => { const t = getTrack(task.title); return t ? (
+                        <span className="text-xs font-bold px-2.5 py-1 rounded-full" style={{ background: t.bg, color: t.color }}>
+                          {t.emoji} {t.label}
+                        </span>
+                      ) : null })()}
+                      {task.type === 'team' && <Badge variant="honeycomb">Team task</Badge>}
+                      {task.requires_coach_verification && <Badge variant="info">⭐ Milestone</Badge>}
+                    </div>
+                    <p className="font-bold text-classic-navy text-base">{task.title}</p>
+                    {task.due_date && (
+                      <p className="text-sm text-denim mt-1">📅 Due {task.due_date}</p>
+                    )}
+                  </div>
+                  <StatusBadge status={sub?.status || 'not_started'} />
+                </div>
+              </Link>
+            )
+          })}
+          {tasks.length === 0 && <p className="text-denim text-base">No tasks for this module yet.</p>}
         </div>
       </div>
     </div>

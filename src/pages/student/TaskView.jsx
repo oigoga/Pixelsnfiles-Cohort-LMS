@@ -134,7 +134,7 @@ export default function TaskView() {
   const track = getTrack(task.title)
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-6">
       <div>
         <Link to={`/student/module/${mod?.id}`} className="text-sm text-denim hover:text-atlantic-navy">
           ← {mod?.title || 'Module'}
@@ -149,24 +149,24 @@ export default function TaskView() {
           {task.requires_coach_verification && <Badge variant="info">⭐ Milestone</Badge>}
           {submission && <StatusBadge status={submission.status} />}
         </div>
-        <h1 className="font-display text-3xl text-atlantic-navy mt-2">{task.title}</h1>
-        {task.due_date && <p className="text-sm text-denim mt-1">📅 Due {task.due_date}</p>}
+        <h1 className="font-display text-4xl font-bold text-atlantic-navy mt-2 leading-tight">{task.title}</h1>
+        {task.due_date && <p className="text-base text-denim mt-2">📅 Due {task.due_date}</p>}
       </div>
 
       {/* Instructions */}
       <Card>
-        <h2 className="font-display text-xl text-atlantic-navy mb-3">Here's what you're building</h2>
-        <p className="text-denim text-sm leading-relaxed whitespace-pre-line">{task.instructions}</p>
+        <h2 className="font-display text-2xl font-bold text-atlantic-navy mb-3">Here's what you're building</h2>
+        <p className="text-classic-navy text-base leading-relaxed whitespace-pre-line">{task.instructions}</p>
       </Card>
 
       {/* Definition of done */}
       {task.definition_of_done?.length > 0 && (
         <Card>
-          <h2 className="font-display text-xl text-atlantic-navy mb-1">You're done when…</h2>
-          <p className="text-xs text-denim mb-4">Every box needs to be true before you submit. No skipping.</p>
-          <ul className="space-y-2.5">
+          <h2 className="font-display text-2xl font-bold text-atlantic-navy mb-1">You're done when…</h2>
+          <p className="text-sm text-denim mb-4">Every box needs to be true before you submit. No skipping.</p>
+          <ul className="space-y-3">
             {task.definition_of_done.map((item, i) => (
-              <li key={i} className="flex items-start gap-3 text-sm text-denim bg-powder/40 rounded-xl px-4 py-2.5">
+              <li key={i} className="flex items-start gap-3 text-base text-classic-navy bg-powder/40 rounded-xl px-4 py-3">
                 <span className="mt-0.5 text-honeycomb font-bold shrink-0">✓</span>
                 {item}
               </li>
@@ -177,21 +177,21 @@ export default function TaskView() {
 
       {/* Submission */}
       <Card>
-        <h2 className="font-display text-xl text-atlantic-navy mb-3">
+        <h2 className="font-display text-2xl font-bold text-atlantic-navy mb-3">
           {task.type === 'team' ? 'Team submission' : 'My submission'}
         </h2>
 
         {submission && !canSubmit && (
-          <div className="mb-4 p-3 bg-powder/50 rounded-xl text-sm">
-            <p className="text-denim">Submitted link:</p>
-            <a href={submission.drive_link} target="_blank" rel="noreferrer" className="text-atlantic-navy hover:underline break-all">{submission.drive_link}</a>
+          <div className="mb-4 p-4 bg-powder/50 rounded-xl">
+            <p className="text-sm font-semibold text-denim mb-1">Submitted link</p>
+            <a href={submission.drive_link} target="_blank" rel="noreferrer" className="text-atlantic-navy hover:underline break-all text-base">{submission.drive_link}</a>
           </div>
         )}
 
         {canSubmit ? (
           <form onSubmit={submitWork} className="space-y-4">
             {submission?.status === 'needs_rework' && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-base text-red-700">
                 This submission needs rework. Update your work and resubmit the link.
               </div>
             )}
@@ -205,15 +205,15 @@ export default function TaskView() {
                 placeholder="https://drive.google.com/…"
                 className="input-field"
               />
-              <p className="text-xs text-denim mt-1">Make sure the link is set to "Anyone with the link can view".</p>
+              <p className="text-sm text-denim mt-1">Make sure the link is set to "Anyone with the link can view".</p>
             </div>
-            {error && <p className="text-red-600 text-sm">{error}</p>}
+            {error && <p className="text-red-600 text-base">{error}</p>}
             <Button type="submit" disabled={submitting}>
               {submitting ? 'Submitting…' : submission ? 'Resubmit' : 'Submit work'}
             </Button>
           </form>
         ) : (
-          <p className="text-sm text-denim">
+          <p className="text-base text-denim">
             {submission.status === 'peer_approved' && '✅ Approved by a peer.'}
             {submission.status === 'coach_verified' && '🏅 Verified by the coach.'}
           </p>
@@ -223,7 +223,7 @@ export default function TaskView() {
       {/* Peer reviews */}
       {peerReviews.length > 0 && (
         <Card>
-          <h2 className="font-display text-xl text-atlantic-navy mb-3">Peer feedback</h2>
+          <h2 className="font-display text-2xl font-bold text-atlantic-navy mb-3">Peer feedback</h2>
           <div className="space-y-4">
             {peerReviews.map(r => (
               <div key={r.id} className="border-l-4 border-powder pl-4">
@@ -231,9 +231,9 @@ export default function TaskView() {
                   <Badge variant={r.decision === 'approve' ? 'success' : 'danger'}>
                     {r.decision === 'approve' ? 'Approved' : 'Rework'}
                   </Badge>
-                  <span className="text-xs text-denim">{r.students?.profiles?.full_name}</span>
+                  <span className="text-sm text-denim">{r.students?.profiles?.full_name}</span>
                 </div>
-                {r.comment && <p className="text-sm text-denim mt-1">{r.comment}</p>}
+                {r.comment && <p className="text-base text-classic-navy mt-1">{r.comment}</p>}
               </div>
             ))}
           </div>
@@ -243,14 +243,14 @@ export default function TaskView() {
       {/* Coach verification */}
       {coachVerification && (
         <Card>
-          <h2 className="font-display text-xl text-atlantic-navy mb-3">Coach verification</h2>
+          <h2 className="font-display text-2xl font-bold text-atlantic-navy mb-3">Coach verification</h2>
           <div className="flex items-center gap-2 mb-2">
             <Badge variant={coachVerification.decision === 'verify' ? 'honeycomb' : 'danger'}>
               {coachVerification.decision === 'verify' ? 'Verified ✓' : 'Needs rework'}
             </Badge>
           </div>
           {coachVerification.comment && (
-            <p className="text-sm text-denim">{coachVerification.comment}</p>
+            <p className="text-base text-classic-navy">{coachVerification.comment}</p>
           )}
         </Card>
       )}
