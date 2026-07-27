@@ -23,6 +23,7 @@ import VerificationQueue from './pages/coach/VerificationQueue'
 import ModuleManager from './pages/coach/ModuleManager'
 import AnnouncementsManager from './pages/coach/AnnouncementsManager'
 import CohortSetup from './pages/coach/CohortSetup'
+import GroupsManager from './pages/coach/GroupsManager'
 
 export default function App() {
   return (
@@ -68,6 +69,7 @@ export default function App() {
             <Route path="announcements" element={<AnnouncementsManager />} />
             <Route path="leaderboard" element={<Leaderboard />} />
             <Route path="cohort" element={<CohortSetup />} />
+            <Route path="groups" element={<GroupsManager />} />
           </Route>
 
           {/* Catch-all: redirect to login */}

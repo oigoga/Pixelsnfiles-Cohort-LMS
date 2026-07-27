@@ -8,6 +8,7 @@ const navItems = [
   { to: '/coach/verify', label: 'Verify Queue' },
   { to: '/coach/modules', label: 'Modules' },
   { to: '/coach/cohort', label: 'Cohort Setup' },
+  { to: '/coach/groups', label: 'Groups' },
   { to: '/coach/announcements', label: 'Announcements' },
 ]
 
