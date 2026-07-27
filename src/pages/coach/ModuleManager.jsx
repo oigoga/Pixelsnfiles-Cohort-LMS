@@ -181,38 +181,42 @@ export default function ModuleManager() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-[220px,1fr] gap-6">
-        {/* Module list */}
-        <div className="space-y-1">
+      {/* Module cards grid */}
+      {modules.length === 0 ? (
+        <p className="text-sm text-denim">No modules yet. Click + Module to add one.</p>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {modules.map(m => (
             <div key={m.id} className="relative group">
               <button
                 onClick={() => selectModule(m)}
-                className={`w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+                className={`w-full aspect-square rounded-2xl border-2 p-4 flex flex-col justify-between text-left transition-all ${
                   selected?.id === m.id
-                    ? 'bg-atlantic-navy text-soft-butter'
-                    : 'bg-whipped-cream text-denim hover:bg-powder border border-powder'
+                    ? 'bg-atlantic-navy border-atlantic-navy text-soft-butter shadow-lg scale-[1.02]'
+                    : 'bg-whipped-cream border-powder hover:border-denim hover:shadow-sm'
                 }`}
               >
-                <div className="font-medium">Wk {m.week_number}</div>
-                <div className="text-xs mt-0.5 opacity-75 truncate pr-4">{m.title}</div>
+                <p className={`font-display text-2xl font-bold ${selected?.id === m.id ? 'text-soft-butter' : 'text-atlantic-navy'}`}>
+                  {m.week_number}
+                </p>
+                <p className={`text-xs font-medium leading-snug ${selected?.id === m.id ? 'text-powder' : 'text-denim'}`}>
+                  {m.title}
+                </p>
               </button>
               <button
                 onClick={() => deleteModule(m.id)}
-                className="absolute top-2 right-2 text-xs opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity"
+                className="absolute top-2 right-2 text-xs opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity bg-white rounded-full w-5 h-5 flex items-center justify-center shadow-sm"
               >
                 ✕
               </button>
             </div>
           ))}
-          {modules.length === 0 && (
-            <p className="text-sm text-denim px-2">No modules yet.</p>
-          )}
         </div>
+      )}
 
-        {/* Module editor */}
-        {selected ? (
-          <div className="space-y-6">
+      {/* Editor — appears below grid when a module is selected */}
+      {selected && (
+        <div className="space-y-6">
             {/* Module details */}
             <Card>
               <h2 className="font-display text-xl text-atlantic-navy mb-4">Week details</h2>
@@ -363,12 +367,7 @@ export default function ModuleManager() {
               )}
             </Card>
           </div>
-        ) : (
-          <Card className="flex items-center justify-center min-h-[200px]">
-            <p className="text-denim text-sm">← Select a module to edit</p>
-          </Card>
-        )}
-      </div>
+      )}
     </div>
   )
 }
