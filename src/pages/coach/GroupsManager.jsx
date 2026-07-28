@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../context/AuthContext'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 
 export default function GroupsManager() {
+  const { profile } = useAuth()
   const [cohorts, setCohorts]   = useState([])
   const [cohortId, setCohortId] = useState('')
   const [groups, setGroups]     = useState([])
@@ -14,6 +16,14 @@ export default function GroupsManager() {
   const [projectForm, setProjectForm] = useState({
     project_title: '', project_brief: '', project_resource_url: '',
   })
+
+  // Chat
+  const [messages, setMessages]   = useState([])
+  const [newMsg, setNewMsg]       = useState('')
+  const [sending, setSending]     = useState(false)
+  const [chatError, setChatError] = useState('')
+  const messagesEndRef = useRef(null)
+  const pollRef        = useRef(null)
 
   useEffect(() => {
     supabase.from('cohorts').select('id, name').order('created_at', { ascending: false })
@@ -26,8 +36,22 @@ export default function GroupsManager() {
   useEffect(() => {
     if (!cohortId) return
     supabase.from('peer_groups').select('*').eq('cohort_id', cohortId).order('label')
-      .then(({ data }) => { setGroups(data || []); setSelected(null) })
+      .then(({ data }) => { setGroups(data || []); setSelected(null); clearChat() })
   }, [cohortId])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+
+  // Stop polling when component unmounts
+  useEffect(() => () => clearInterval(pollRef.current), [])
+
+  function clearChat() {
+    clearInterval(pollRef.current)
+    setMessages([])
+    setNewMsg('')
+    setChatError('')
+  }
 
   async function selectGroup(g) {
     setSelected(g)
@@ -42,6 +66,46 @@ export default function GroupsManager() {
       .select('id, profiles(full_name, email)')
       .eq('peer_group_id', g.id)
     setMembers(data || [])
+
+    // Start chat for this group
+    clearInterval(pollRef.current)
+    await loadMessages(g.id)
+    pollRef.current = setInterval(() => loadMessages(g.id), 5000)
+  }
+
+  async function loadMessages(groupId) {
+    const { data: msgs, error } = await supabase
+      .from('group_messages')
+      .select('id, author_id, body, created_at')
+      .eq('peer_group_id', groupId)
+      .order('created_at')
+    if (error) { setChatError(error.message); return }
+    if (!msgs?.length) { setMessages([]); setChatError(''); return }
+
+    const authorIds = [...new Set(msgs.map(m => m.author_id))]
+    const { data: profilesData } = await supabase
+      .from('profiles').select('id, full_name, role').in('id', authorIds)
+    const profileMap = {}
+    profilesData?.forEach(p => { profileMap[p.id] = p })
+
+    setChatError('')
+    setMessages(msgs.map(m => ({ ...m, profiles: profileMap[m.author_id] || null })))
+  }
+
+  async function sendMessage(e) {
+    e.preventDefault()
+    if (!newMsg.trim() || !selected) return
+    setSending(true)
+    setChatError('')
+    const { error } = await supabase.from('group_messages').insert({
+      peer_group_id: selected.id,
+      author_id:     profile.id,
+      body:          newMsg.trim(),
+    })
+    if (error) { setChatError(error.message); setSending(false); return }
+    setNewMsg('')
+    setSending(false)
+    await loadMessages(selected.id)
   }
 
   async function saveProject(e) {
@@ -116,67 +180,129 @@ export default function GroupsManager() {
         </div>
       )}
 
-      {/* Detail panel — appears below cards when a group is selected */}
       {selected && (
-        <div className="grid md:grid-cols-[1fr,1.5fr] gap-6 pt-2">
-          {/* Members */}
-          <Card>
-            <p className="eyebrow mb-3">Members — {selected.label}</p>
-            {members.length === 0 ? (
-              <p className="text-sm text-denim">No members assigned yet.</p>
-            ) : (
-              <ul className="space-y-3">
-                {members.map(m => (
-                  <li key={m.id} className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-atlantic-navy/10 flex items-center justify-center text-atlantic-navy font-bold text-sm shrink-0">
-                      {(m.profiles?.full_name || '?')[0].toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-classic-navy truncate">{m.profiles?.full_name || '—'}</p>
-                      <p className="text-xs text-denim truncate">{m.profiles?.email}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
+        <div className="space-y-6 pt-2">
+          {/* Members + Project */}
+          <div className="grid md:grid-cols-[1fr,1.5fr] gap-6">
+            {/* Members */}
+            <Card>
+              <p className="eyebrow mb-3">Members — {selected.label}</p>
+              {members.length === 0 ? (
+                <p className="text-sm text-denim">No members assigned yet.</p>
+              ) : (
+                <ul className="space-y-3">
+                  {members.map(m => (
+                    <li key={m.id} className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-atlantic-navy/10 flex items-center justify-center text-atlantic-navy font-bold text-sm shrink-0">
+                        {(m.profiles?.full_name || '?')[0].toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-classic-navy truncate">{m.profiles?.full_name || '—'}</p>
+                        <p className="text-xs text-denim truncate">{m.profiles?.email}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
 
-          {/* Project form */}
+            {/* Project form */}
+            <Card>
+              <h2 className="font-display text-xl text-atlantic-navy mb-4">Group Project</h2>
+              <form onSubmit={saveProject} className="space-y-4">
+                <div>
+                  <label className="eyebrow block mb-1">Project title</label>
+                  <input
+                    value={projectForm.project_title}
+                    onChange={e => setProjectForm(p => ({ ...p, project_title: e.target.value }))}
+                    className="input-field"
+                    placeholder="e.g. Kova Brand Refresh"
+                  />
+                </div>
+                <div>
+                  <label className="eyebrow block mb-1">Brief</label>
+                  <textarea
+                    rows={4}
+                    value={projectForm.project_brief}
+                    onChange={e => setProjectForm(p => ({ ...p, project_brief: e.target.value }))}
+                    className="input-field resize-y"
+                    placeholder="Client context, deliverables, any constraints…"
+                  />
+                </div>
+                <div>
+                  <label className="eyebrow block mb-1">Resource link</label>
+                  <input
+                    type="url"
+                    value={projectForm.project_resource_url}
+                    onChange={e => setProjectForm(p => ({ ...p, project_resource_url: e.target.value }))}
+                    className="input-field"
+                    placeholder="https://drive.google.com/…"
+                  />
+                  <p className="text-xs text-denim mt-1">Drive folder, Notion doc, brief PDF.</p>
+                </div>
+                <Button type="submit" disabled={saving}>
+                  {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save project'}
+                </Button>
+              </form>
+            </Card>
+          </div>
+
+          {/* Group chat */}
           <Card>
-            <h2 className="font-display text-xl text-atlantic-navy mb-4">Group Project</h2>
-            <form onSubmit={saveProject} className="space-y-4">
-              <div>
-                <label className="eyebrow block mb-1">Project title</label>
-                <input
-                  value={projectForm.project_title}
-                  onChange={e => setProjectForm(p => ({ ...p, project_title: e.target.value }))}
-                  className="input-field"
-                  placeholder="e.g. Kova Brand Refresh"
-                />
+            <h2 className="font-display text-xl text-atlantic-navy mb-4">
+              Group Chat — {selected.label}
+            </h2>
+            {chatError && (
+              <div className="mb-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+                {chatError}
               </div>
-              <div>
-                <label className="eyebrow block mb-1">Brief</label>
-                <textarea
-                  rows={6}
-                  value={projectForm.project_brief}
-                  onChange={e => setProjectForm(p => ({ ...p, project_brief: e.target.value }))}
-                  className="input-field resize-y"
-                  placeholder="Client context, deliverables, any constraints…"
-                />
-              </div>
-              <div>
-                <label className="eyebrow block mb-1">Resource link</label>
-                <input
-                  type="url"
-                  value={projectForm.project_resource_url}
-                  onChange={e => setProjectForm(p => ({ ...p, project_resource_url: e.target.value }))}
-                  className="input-field"
-                  placeholder="https://drive.google.com/…"
-                />
-                <p className="text-xs text-denim mt-1">Drive folder, Notion doc, brief PDF.</p>
-              </div>
-              <Button type="submit" disabled={saving}>
-                {saving ? 'Saving…' : saved ? '✓ Saved' : 'Save project'}
+            )}
+            <div className="h-72 overflow-y-auto space-y-3 mb-4 pr-1">
+              {messages.length === 0 ? (
+                <p className="text-sm text-denim text-center py-10">No messages yet in this group.</p>
+              ) : (
+                messages.map(msg => {
+                  const isMe    = msg.author_id === profile.id
+                  const isCoach = msg.profiles?.role === 'coach'
+                  return (
+                    <div key={msg.id} className={`flex gap-2.5 ${isMe ? 'flex-row-reverse' : ''}`}>
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${
+                        isCoach ? 'bg-honeycomb text-classic-navy' : 'bg-atlantic-navy/10 text-atlantic-navy'
+                      }`}>
+                        {(msg.profiles?.full_name || '?')[0].toUpperCase()}
+                      </div>
+                      <div className={`max-w-[75%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                        <p className={`text-xs text-denim mb-1 ${isMe ? 'text-right' : ''}`}>
+                          {isCoach ? '⭐ Coach' : isMe ? 'You' : msg.profiles?.full_name}
+                          {' · '}
+                          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed ${
+                          isMe
+                            ? 'bg-atlantic-navy text-soft-butter rounded-tr-sm'
+                            : isCoach
+                            ? 'bg-honeycomb/20 text-classic-navy border border-honeycomb/40 rounded-tl-sm'
+                            : 'bg-powder/60 text-classic-navy rounded-tl-sm'
+                        }`}>
+                          {msg.body}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+            <form onSubmit={sendMessage} className="flex gap-3">
+              <input
+                value={newMsg}
+                onChange={e => setNewMsg(e.target.value)}
+                placeholder={`Message ${selected.label}…`}
+                className="input-field flex-1 text-sm"
+                maxLength={2000}
+              />
+              <Button type="submit" disabled={sending || !newMsg.trim()}>
+                {sending ? '…' : 'Send'}
               </Button>
             </form>
           </Card>
