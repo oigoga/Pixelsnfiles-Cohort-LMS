@@ -17,6 +17,7 @@ export default function GroupHub() {
   const [teamTasks, setTeamTasks]     = useState([])
   const [teamSubs, setTeamSubs]       = useState({})
   const [messages, setMessages]       = useState([])
+  const [chatError, setChatError]     = useState('')
   const [newMsg, setNewMsg]           = useState('')
   const [sending, setSending]         = useState(false)
   const messagesEndRef = useRef(null)
@@ -86,23 +87,34 @@ export default function GroupHub() {
   useEffect(() => () => clearInterval(pollRef.current), [])
 
   async function loadMessages(groupId) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('group_messages')
-      .select('*, profiles(full_name, role)')
+      .select('*, profiles:author_id(full_name, role)')
       .eq('peer_group_id', groupId)
       .order('created_at')
-    setMessages(data || [])
+    if (error) {
+      setChatError(error.message)
+    } else {
+      setChatError('')
+      setMessages(data || [])
+    }
   }
 
   async function sendMessage(e) {
     e.preventDefault()
     if (!newMsg.trim()) return
     setSending(true)
-    await supabase.from('group_messages').insert({
+    setChatError('')
+    const { error } = await supabase.from('group_messages').insert({
       peer_group_id: student.peer_group_id,
       author_id:     profile.id,
       body:          newMsg.trim(),
     })
+    if (error) {
+      setChatError(error.message)
+      setSending(false)
+      return
+    }
     setNewMsg('')
     setSending(false)
     await loadMessages(student.peer_group_id)
@@ -214,6 +226,11 @@ export default function GroupHub() {
           {/* Group chat */}
           <div>
             <h2 className="font-display text-2xl text-atlantic-navy mb-3">Group Chat</h2>
+            {chatError && (
+              <div className="mb-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+                <strong>Chat error:</strong> {chatError}
+              </div>
+            )}
             <Card>
               <div className="h-72 overflow-y-auto space-y-3 mb-4 pr-1">
                 {messages.length === 0 && (
