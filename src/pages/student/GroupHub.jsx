@@ -87,17 +87,26 @@ export default function GroupHub() {
   useEffect(() => () => clearInterval(pollRef.current), [])
 
   async function loadMessages(groupId) {
-    const { data, error } = await supabase
+    const { data: msgs, error } = await supabase
       .from('group_messages')
-      .select('*, profiles:author_id(full_name, role)')
+      .select('id, author_id, body, created_at')
       .eq('peer_group_id', groupId)
       .order('created_at')
-    if (error) {
-      setChatError(error.message)
-    } else {
-      setChatError('')
-      setMessages(data || [])
-    }
+    if (error) { setChatError(error.message); return }
+
+    if (!msgs?.length) { setMessages([]); setChatError(''); return }
+
+    // Fetch author profiles separately (avoids FK join cache issues)
+    const authorIds = [...new Set(msgs.map(m => m.author_id))]
+    const { data: profilesData } = await supabase
+      .from('profiles')
+      .select('id, full_name, role')
+      .in('id', authorIds)
+    const profileMap = {}
+    profilesData?.forEach(p => { profileMap[p.id] = p })
+
+    setChatError('')
+    setMessages(msgs.map(m => ({ ...m, profiles: profileMap[m.author_id] || null })))
   }
 
   async function sendMessage(e) {

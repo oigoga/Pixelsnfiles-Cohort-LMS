@@ -14,7 +14,6 @@ function timeAgo(ts) {
   return new Date(ts).toLocaleDateString()
 }
 
-// Defined outside QandA so React doesn't remount it on every render
 function QuestionBlock({
   q, profile, isCoach,
   expanded, setExpanded,
@@ -36,8 +35,6 @@ function QuestionBlock({
         ? 'border-atlantic-navy/30 bg-white shadow-md'
         : 'border-powder bg-white hover:border-denim/40 hover:shadow-sm'
     }`}>
-
-      {/* Question row */}
       <div className="p-5 flex items-start gap-4">
         {/* Upvote */}
         <button
@@ -53,7 +50,6 @@ function QuestionBlock({
           <span className="text-xs font-bold leading-none">{voteCount}</span>
         </button>
 
-        {/* Body + meta */}
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap gap-2 mb-1.5">
             {voteCount >= 2 && !q.is_resolved && (
@@ -80,7 +76,6 @@ function QuestionBlock({
           </p>
         </div>
 
-        {/* Actions */}
         <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
           {isCoach && (
             <button
@@ -103,11 +98,8 @@ function QuestionBlock({
         </div>
       </div>
 
-      {/* Expanded panel */}
       {isExp && (
         <div className="border-t border-powder/60 px-5 pb-5 pt-4 space-y-5">
-
-          {/* Existing answers */}
           {answers.length > 0 && (
             <div className="space-y-3">
               {answers.map(a => {
@@ -128,10 +120,7 @@ function QuestionBlock({
                       </p>
                     )}
                     {a.link && (
-                      <a
-                        href={a.link}
-                        target="_blank"
-                        rel="noreferrer"
+                      <a href={a.link} target="_blank" rel="noreferrer"
                         className={`inline-flex items-center gap-1.5 mt-2.5 text-sm font-semibold hover:underline ${coachAnswer ? 'text-honeycomb' : 'text-atlantic-navy'}`}
                       >
                         🎥 Watch / view resource →
@@ -143,7 +132,6 @@ function QuestionBlock({
             </div>
           )}
 
-          {/* Answer form */}
           {!q.is_resolved && (
             <div className="space-y-2">
               <p className="text-xs font-bold text-denim uppercase tracking-widest">
@@ -154,11 +142,7 @@ function QuestionBlock({
                 value={af.body}
                 onChange={e => onSetAnswerField(q.id, 'body', e.target.value)}
                 className="input-field resize-none text-sm"
-                placeholder={
-                  isCoach
-                    ? 'Type your answer — or just drop a link below.'
-                    : 'Share what you know or how you solved this…'
-                }
+                placeholder={isCoach ? 'Type your answer — or just drop a link below.' : 'Share what you know…'}
               />
               <input
                 type="url"
@@ -186,17 +170,17 @@ export default function QandA() {
   const { profile } = useAuth()
   const isCoach = profile?.role === 'coach'
 
-  const [cohortId, setCohortId]         = useState('')
-  const [cohorts, setCohorts]           = useState([])
-  const [questions, setQuestions]       = useState([])
-  const [loading, setLoading]           = useState(true)
-  const [loadError, setLoadError]       = useState('')
-  const [expanded, setExpanded]         = useState(null)
-  const [showAskForm, setShowAskForm]   = useState(false)
-  const [newBody, setNewBody]           = useState('')
-  const [posting, setPosting]           = useState(false)
-  const [postError, setPostError]       = useState('')
-  const [answerForms, setAnswerForms]   = useState({})
+  const [cohortId, setCohortId]           = useState('')
+  const [cohorts, setCohorts]             = useState([])
+  const [questions, setQuestions]         = useState([])
+  const [loading, setLoading]             = useState(true)
+  const [loadError, setLoadError]         = useState('')
+  const [expanded, setExpanded]           = useState(null)
+  const [showAskForm, setShowAskForm]     = useState(false)
+  const [newBody, setNewBody]             = useState('')
+  const [posting, setPosting]             = useState(false)
+  const [postError, setPostError]         = useState('')
+  const [answerForms, setAnswerForms]     = useState({})
   const [postingAnswer, setPostingAnswer] = useState(null)
 
   useEffect(() => {
@@ -209,7 +193,7 @@ export default function QandA() {
         })
     } else {
       supabase.from('students').select('cohort_id').eq('profile_id', profile.id).single()
-        .then(({ data }) => { if (data) setCohortId(data.cohort_id) })
+        .then(({ data }) => { if (data?.cohort_id) setCohortId(data.cohort_id) })
     }
   }, [profile])
 
@@ -218,34 +202,71 @@ export default function QandA() {
   async function load() {
     setLoading(true)
     setLoadError('')
-    const { data, error } = await supabase
+
+    // Fetch questions
+    const { data: qData, error: qErr } = await supabase
       .from('questions')
-      .select(`
-        *,
-        profiles:author_id(full_name, role),
-        question_answers(id, body, link, created_at, profiles:author_id(full_name, role)),
-        question_votes(profile_id)
-      `)
+      .select('*')
       .eq('cohort_id', cohortId)
       .order('created_at', { ascending: false })
 
-    if (error) {
-      setLoadError(error.message)
-      setLoading(false)
-      return
-    }
+    if (qErr) { setLoadError(qErr.message); setLoading(false); return }
 
-    const sorted = (data || []).sort((a, b) => {
+    if (!qData?.length) { setQuestions([]); setLoading(false); return }
+
+    const qIds = qData.map(q => q.id)
+
+    // Fetch votes, answers, and all author profiles in parallel
+    const [votesRes, answersRes] = await Promise.all([
+      supabase.from('question_votes').select('question_id, profile_id').in('question_id', qIds),
+      supabase.from('question_answers').select('*').in('question_id', qIds).order('created_at'),
+    ])
+
+    // Collect all author IDs and fetch profiles in one query
+    const authorIds = [...new Set([
+      ...qData.map(q => q.author_id),
+      ...(answersRes.data || []).map(a => a.author_id),
+    ])]
+    const { data: profilesData } = await supabase
+      .from('profiles')
+      .select('id, full_name, role')
+      .in('id', authorIds)
+
+    const profileMap = {}
+    profilesData?.forEach(p => { profileMap[p.id] = p })
+
+    // Build vote map
+    const votesMap = {}
+    votesRes.data?.forEach(v => {
+      if (!votesMap[v.question_id]) votesMap[v.question_id] = []
+      votesMap[v.question_id].push(v)
+    })
+
+    // Build answers map with profiles attached
+    const answersMap = {}
+    answersRes.data?.forEach(a => {
+      if (!answersMap[a.question_id]) answersMap[a.question_id] = []
+      answersMap[a.question_id].push({ ...a, profiles: profileMap[a.author_id] || null })
+    })
+
+    // Merge and sort
+    const merged = qData.map(q => ({
+      ...q,
+      profiles:         profileMap[q.author_id] || null,
+      question_votes:   votesMap[q.id]   || [],
+      question_answers: answersMap[q.id] || [],
+    })).sort((a, b) => {
       if (a.is_resolved !== b.is_resolved) return a.is_resolved ? 1 : -1
       return (b.question_votes?.length || 0) - (a.question_votes?.length || 0)
     })
-    setQuestions(sorted)
+
+    setQuestions(merged)
     setLoading(false)
   }
 
   async function postQuestion(e) {
     e.preventDefault()
-    if (!newBody.trim()) return
+    if (!newBody.trim() || !cohortId) return
     setPosting(true)
     setPostError('')
     const { error } = await supabase.from('questions').insert({
@@ -312,7 +333,6 @@ export default function QandA() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           {isCoach && <p className="eyebrow">Coach</p>}
@@ -329,13 +349,12 @@ export default function QandA() {
               {cohorts.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           )}
-          {!showAskForm && (
+          {!showAskForm && cohortId && (
             <Button onClick={() => setShowAskForm(true)}>Ask a question</Button>
           )}
         </div>
       </div>
 
-      {/* New question form */}
       {showAskForm && (
         <Card>
           <h2 className="font-bold text-atlantic-navy mb-3 text-lg">Your question</h2>
@@ -357,11 +376,8 @@ export default function QandA() {
               <Button type="submit" disabled={posting || !newBody.trim()}>
                 {posting ? 'Posting…' : 'Post question'}
               </Button>
-              <Button
-                variant="secondary"
-                type="button"
-                onClick={() => { setShowAskForm(false); setNewBody('') }}
-              >
+              <Button variant="secondary" type="button"
+                onClick={() => { setShowAskForm(false); setNewBody('') }}>
                 Cancel
               </Button>
             </div>
@@ -369,14 +385,17 @@ export default function QandA() {
         </Card>
       )}
 
-      {/* Question list */}
       {loading ? (
         <div className="flex justify-center py-20"><Spinner className="w-8 h-8" /></div>
       ) : loadError ? (
         <Card>
           <p className="text-red-600 font-semibold mb-1">Couldn't load questions</p>
-          <p className="text-sm text-denim">{loadError}</p>
+          <p className="text-sm text-denim font-mono">{loadError}</p>
           <p className="text-xs text-denim mt-2">Make sure you've run <code className="bg-powder px-1 rounded">supabase/qa.sql</code> in the Supabase SQL Editor.</p>
+        </Card>
+      ) : !cohortId ? (
+        <Card>
+          <p className="text-denim text-base">Not enrolled in a cohort yet.</p>
         </Card>
       ) : questions.length === 0 ? (
         <Card>
