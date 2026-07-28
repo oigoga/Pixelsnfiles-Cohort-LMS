@@ -9,6 +9,7 @@ const navItems = [
   { to: '/coach/modules', label: 'Modules' },
   { to: '/coach/cohort', label: 'Cohort Setup' },
   { to: '/coach/groups', label: 'Groups' },
+  { to: '/coach/qa', label: 'Q&A' },
   { to: '/coach/announcements', label: 'Announcements' },
 ]
 

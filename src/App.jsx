@@ -14,6 +14,7 @@ import PeerReviewQueue from './pages/student/PeerReviewQueue'
 import GroupHub from './pages/student/GroupHub'
 import Announcements from './pages/student/Announcements'
 import Leaderboard from './pages/Leaderboard'
+import QandA from './pages/QandA'
 
 // Coach pages
 import OverviewBoard from './pages/coach/OverviewBoard'
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="leaderboard" element={<Leaderboard />} />
             <Route path="review" element={<PeerReviewQueue />} />
             <Route path="group" element={<GroupHub />} />
+            <Route path="qa" element={<QandA />} />
           </Route>
 
           {/* Coach routes */}
@@ -70,6 +72,7 @@ export default function App() {
             <Route path="leaderboard" element={<Leaderboard />} />
             <Route path="cohort" element={<CohortSetup />} />
             <Route path="groups" element={<GroupsManager />} />
+            <Route path="qa" element={<QandA />} />
           </Route>
 
           {/* Catch-all: redirect to login */}

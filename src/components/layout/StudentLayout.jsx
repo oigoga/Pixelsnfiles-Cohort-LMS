@@ -8,6 +8,7 @@ const navItems = [
   { to: '/student/leaderboard', label: 'Leaderboard' },
   { to: '/student/review', label: 'Peer Review' },
   { to: '/student/group', label: 'Group Hub' },
+  { to: '/student/qa', label: 'Q&A' },
 ]
 
 export default function StudentLayout() {
