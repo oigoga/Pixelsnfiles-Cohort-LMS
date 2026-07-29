@@ -52,6 +52,14 @@ export default function CohortSetup() {
   const [renameValue, setRenameValue]     = useState('')
   const [groupError, setGroupError]       = useState('')
 
+  // Track assignment
+  const [trackEditing, setTrackEditing] = useState({}) // studentId → custom text being typed
+
+  async function updateTrack(studentId, track) {
+    await supabase.from('students').update({ track }).eq('id', studentId)
+    setStudents(prev => prev.map(s => s.id === studentId ? { ...s, track } : s))
+  }
+
   // Bulk student import
   const bulkFileRef = useRef()
   const [bulkRows, setBulkRows]         = useState([])
@@ -563,6 +571,7 @@ export default function CohortSetup() {
                       <th className="text-left py-2 pr-4 eyebrow">Name</th>
                       <th className="text-left py-2 pr-4 eyebrow">Email</th>
                       <th className="text-left py-2 pr-4 eyebrow">Code</th>
+                      <th className="text-left py-2 pr-4 eyebrow">Track</th>
                       <th className="text-left py-2 pr-4 eyebrow">Status</th>
                       <th className="text-left py-2 eyebrow">Group</th>
                     </tr>
@@ -579,6 +588,53 @@ export default function CohortSetup() {
                               ? <span className="font-mono text-xs bg-powder px-2 py-1 rounded-lg text-classic-navy tracking-widest">{studentCode}</span>
                               : <span className="text-denim/40 text-xs">—</span>
                             }
+                          </td>
+                          <td className="py-2.5 pr-4">
+                            {(() => {
+                              const track = s.track || 'ao'
+                              const isKnown = !!TRACKS[track]
+                              const isEditing = trackEditing[s.id] !== undefined
+                              if (isEditing) {
+                                return (
+                                  <input
+                                    autoFocus
+                                    value={trackEditing[s.id]}
+                                    onChange={e => setTrackEditing(p => ({ ...p, [s.id]: e.target.value }))}
+                                    onBlur={() => {
+                                      const val = trackEditing[s.id].trim()
+                                      if (val) updateTrack(s.id, val)
+                                      setTrackEditing(p => { const n = { ...p }; delete n[s.id]; return n })
+                                    }}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') e.target.blur()
+                                      if (e.key === 'Escape') setTrackEditing(p => { const n = { ...p }; delete n[s.id]; return n })
+                                    }}
+                                    placeholder="e.g. Finance…"
+                                    className="input-field text-xs py-1 w-28"
+                                  />
+                                )
+                              }
+                              return (
+                                <select
+                                  value={isKnown ? track : '__custom__'}
+                                  onChange={e => {
+                                    if (e.target.value === '__custom__') {
+                                      setTrackEditing(p => ({ ...p, [s.id]: isKnown ? '' : track }))
+                                    } else {
+                                      updateTrack(s.id, e.target.value)
+                                    }
+                                  }}
+                                  className="input-field text-xs py-1 w-36"
+                                >
+                                  <option value="ao">⚙️ Admin & Ops</option>
+                                  <option value="design">🎨 Design</option>
+                                  <option value="marketing">📣 Marketing</option>
+                                  <option value="get_hired">🚀 Get Hired</option>
+                                  {!isKnown && <option value="__custom__">{track}</option>}
+                                  <option value="__custom__">✏️ Custom…</option>
+                                </select>
+                              )
+                            })()}
                           </td>
                           <td className="py-2.5 pr-4">
                             <Badge variant={s.status === 'active' ? 'success' : s.status === 'withdrawn' ? 'danger' : 'info'}>
