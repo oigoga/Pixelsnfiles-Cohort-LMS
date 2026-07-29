@@ -5,7 +5,7 @@ import { Logo } from '../../components/ui/Logo'
 
 function genCode(fullName, suffix = '') {
   const first = (fullName || '').trim().split(/\s+/)[0].toUpperCase().replace(/[^A-Z]/g, '').slice(0, 8) || 'STUDENT'
-  return `PNF-${first}${suffix}`
+  return `${first}-PNF${suffix}`
 }
 
 function randomSuffix() {
