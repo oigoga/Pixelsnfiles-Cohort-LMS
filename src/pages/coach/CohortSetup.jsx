@@ -5,6 +5,7 @@ import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { StatusBadge } from '../../components/ui/StatusBadge'
+import { StudentName } from '../../components/ui/StudentName'
 const TRACKS = {
   design:    { label: 'Design',      emoji: '🎨', bg: 'bg-purple-100', text: 'text-purple-800' },
   marketing: { label: 'Marketing',   emoji: '📣', bg: 'bg-pink-100',   text: 'text-pink-800'   },
@@ -581,7 +582,7 @@ export default function CohortSetup() {
                       const studentCode = codes.find(c => c.email === s.profiles?.email)?.code
                       return (
                         <tr key={s.id} className="border-b border-powder/50 hover:bg-powder/30 transition-colors">
-                          <td className="py-2.5 pr-4 font-medium text-classic-navy">{s.profiles?.full_name || '—'}</td>
+                          <td className="py-2.5 pr-4"><StudentName name={s.profiles?.full_name || '—'} track={s.track} /></td>
                           <td className="py-2.5 pr-4 text-denim">{s.profiles?.email}</td>
                           <td className="py-2.5 pr-4">
                             {studentCode
@@ -782,8 +783,8 @@ export default function CohortSetup() {
                               <div className="w-8 h-8 rounded-full bg-atlantic-navy/10 flex items-center justify-center text-atlantic-navy font-bold text-sm shrink-0">
                                 {(s.profiles?.full_name || '?')[0].toUpperCase()}
                               </div>
-                              <span className="flex-1 text-sm font-medium text-classic-navy">
-                                {s.profiles?.full_name || '—'}
+                              <span className="flex-1">
+                                <StudentName name={s.profiles?.full_name || '—'} track={s.track} className="text-sm" />
                               </span>
                               <button
                                 onClick={() => assignStudent(s.id, null)}
@@ -815,7 +816,7 @@ export default function CohortSetup() {
                               <div className="w-6 h-6 rounded-full bg-atlantic-navy/10 flex items-center justify-center text-atlantic-navy font-bold text-xs shrink-0">
                                 {(s.profiles?.full_name || '?')[0].toUpperCase()}
                               </div>
-                              <span className="text-sm font-medium text-classic-navy">{s.profiles?.full_name || '—'}</span>
+                              <StudentName name={s.profiles?.full_name || '—'} track={s.track} className="text-sm" />
                               <span className="text-atlantic-navy text-xs font-bold">+</span>
                             </button>
                           ))}

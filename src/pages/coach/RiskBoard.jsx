@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Spinner } from '../../components/ui/Spinner'
+import { StudentName } from '../../components/ui/StudentName'
 
 // Risk logic:
 // "on track"    — has a submission in the current week or ahead
@@ -52,7 +53,7 @@ export default function RiskBoard() {
 
     const [stuRes, modRes] = await Promise.all([
       supabase.from('students')
-        .select('id, profiles(full_name, email), peer_groups(label)')
+        .select('id, track, profiles(full_name, email), peer_groups(label)')
         .eq('cohort_id', cId)
         .neq('status', 'withdrawn'),
       supabase.from('modules').select('id, week_number').eq('cohort_id', cId),
@@ -141,9 +142,7 @@ export default function RiskBoard() {
                         {(s.profiles?.full_name || s.profiles?.email || '?')[0].toUpperCase()}
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-classic-navy leading-tight">
-                          {s.profiles?.full_name || s.profiles?.email}
-                        </p>
+                        <StudentName name={s.profiles?.full_name || s.profiles?.email} track={s.track} className="text-sm leading-tight" />
                         {s.peer_groups?.label && (
                           <p className="text-xs text-denim">{s.peer_groups.label}</p>
                         )}

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { Spinner } from '../../components/ui/Spinner'
 import { Badge } from '../../components/ui/Badge'
+import { StudentName } from '../../components/ui/StudentName'
 
 const cellColor = {
   not_started:    'bg-powder/60 text-denim',
@@ -43,7 +44,7 @@ export default function OverviewBoard() {
 
     const [stuRes, modRes] = await Promise.all([
       supabase.from('students')
-        .select('id, profiles(full_name, email), peer_groups(label)')
+        .select('id, track, profiles(full_name, email), peer_groups(label)')
         .eq('cohort_id', cId)
         .neq('status', 'withdrawn')
         .order('created_at'),
@@ -149,7 +150,7 @@ export default function OverviewBoard() {
                 <tr key={s.id} className="border-t border-powder hover:bg-powder/20 transition-colors">
                   <td className="px-4 py-2.5 sticky left-0 bg-soft-butter">
                     <Link to={`/coach/student/${s.id}`} className="hover:underline">
-                      <p className="font-medium text-classic-navy">{s.profiles?.full_name || s.profiles?.email}</p>
+                      <StudentName name={s.profiles?.full_name || s.profiles?.email} track={s.track} />
                       {s.peer_groups?.label && (
                         <p className="text-denim mt-0.5">{s.peer_groups.label}</p>
                       )}
