@@ -3,11 +3,14 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { Logo } from '../../components/ui/Logo'
 
-function genCode() {
+function genCode(fullName, suffix = '') {
+  const first = (fullName || '').trim().split(/\s+/)[0].toUpperCase().replace(/[^A-Z]/g, '').slice(0, 8) || 'STUDENT'
+  return `PNF-${first}${suffix}`
+}
+
+function randomSuffix() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let out = 'PNF-'
-  for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)]
-  return out
+  return chars[Math.floor(Math.random() * chars.length)] + chars[Math.floor(Math.random() * chars.length)]
 }
 
 export default function Login() {
@@ -35,11 +38,16 @@ export default function Login() {
     e.preventDefault()
     setNewError('')
     setCreating(true)
-    const newCode = genCode()
-    const { error: err, code: savedCode } = await createStudentCode(name, email, newCode)
+    // Try name-based code; if taken, append a 2-char suffix and retry once
+    let newCode = genCode(name)
+    let result = await createStudentCode(name, email, newCode)
+    if (result.error && result.error.toLowerCase().includes('clash')) {
+      newCode = genCode(name, randomSuffix())
+      result = await createStudentCode(name, email, newCode)
+    }
     setCreating(false)
-    if (err) setNewError(err)
-    else setCreated({ code: savedCode })
+    if (result.error) setNewError(result.error)
+    else setCreated({ code: result.code })
   }
 
   async function handleSignIn(e) {

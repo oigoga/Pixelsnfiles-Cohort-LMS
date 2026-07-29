@@ -12,11 +12,14 @@ const TRACKS = {
   get_hired: { label: 'Get Hired',   emoji: '🚀', bg: 'bg-green-100',  text: 'text-green-800'  },
 }
 
-function genCode() {
+function genCode(fullName, suffix = '') {
+  const first = (fullName || '').trim().split(/\s+/)[0].toUpperCase().replace(/[^A-Z]/g, '').slice(0, 8) || 'STUDENT'
+  return `PNF-${first}${suffix}`
+}
+
+function randomSuffix() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let out = 'PNF-'
-  for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)]
-  return out
+  return chars[Math.floor(Math.random() * chars.length)] + chars[Math.floor(Math.random() * chars.length)]
 }
 
 export default function CohortSetup() {
@@ -92,10 +95,11 @@ export default function CohortSetup() {
   async function createCode(e) {
     e.preventDefault()
     setCreatingCode(true)
-    const code = genCode()
+    const name = codeForm.full_name.trim()
+    const code = genCode(name)
     const { error } = await supabase.from('access_codes').insert({
       code,
-      full_name: codeForm.full_name.trim(),
+      full_name: name,
       email: codeForm.email.trim().toLowerCase(),
       role: codeForm.role,
       cohort_id: activeCohort.id,
@@ -279,9 +283,10 @@ export default function CohortSetup() {
         continue
       }
 
-      // Generate a collision-free code
-      let code, attempts = 0
-      do { code = genCode(); attempts++ } while (usedCodes.has(code) && attempts < 30)
+      // Generate a name-based collision-free code
+      let code = genCode(full_name)
+      let attempts = 0
+      while (usedCodes.has(code) && attempts < 30) { code = genCode(full_name, randomSuffix()); attempts++ }
       usedCodes.add(code)
       existingByEmail[email] = code
 
