@@ -176,7 +176,7 @@ export default function CohortSetup() {
   }
 
   async function loadGroups(cohortId) {
-    const { data } = await supabase.from('peer_groups').select('*').eq('cohort_id', cohortId).order('created_at')
+    const { data } = await supabase.from('peer_groups').select('*').eq('cohort_id', cohortId).order('label')
     setGroups(data || [])
   }
 
@@ -582,7 +582,23 @@ export default function CohortSetup() {
                               {s.status}
                             </Badge>
                           </td>
-                          <td className="py-2.5 text-denim">{s.peer_groups?.label || '—'}</td>
+                          <td className="py-2.5">
+                            {groups.length > 0 ? (
+                              <select
+                                value={s.peer_group_id || ''}
+                                onChange={e => assignStudent(s.id, e.target.value || null)}
+                                disabled={assigningId === s.id}
+                                className="input-field text-xs py-1 w-36"
+                              >
+                                <option value="">— Unassigned</option>
+                                {groups.map(g => (
+                                  <option key={g.id} value={g.id}>{g.label}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="text-denim text-xs">{s.peer_groups?.label || '—'}</span>
+                            )}
+                          </td>
                         </tr>
                       )
                     })}
