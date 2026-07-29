@@ -3,14 +3,10 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { Logo } from '../../components/ui/Logo'
 
-function genCode(fullName, suffix = '') {
-  const first = (fullName || '').trim().split(/\s+/)[0].toUpperCase().replace(/[^A-Z]/g, '').slice(0, 8) || 'STUDENT'
-  return `${first}-PNF${suffix}`
-}
-
-function randomSuffix() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  return chars[Math.floor(Math.random() * chars.length)] + chars[Math.floor(Math.random() * chars.length)]
+function genCode(fullName) {
+  const first = (fullName || '').trim().split(/\s+/)[0].toUpperCase().replace(/[^A-Z]/g, '') || 'STUDENT'
+  const digits = String(Math.floor(Math.random() * 10000)).padStart(4, '0')
+  return `${first}-${digits}`
 }
 
 export default function Login() {
@@ -38,11 +34,11 @@ export default function Login() {
     e.preventDefault()
     setNewError('')
     setCreating(true)
-    // Try name-based code; if taken, append a 2-char suffix and retry once
+    // Try name-based code; if there's a clash (same digits), retry with new digits
     let newCode = genCode(name)
     let result = await createStudentCode(name, email, newCode)
     if (result.error && result.error.toLowerCase().includes('clash')) {
-      newCode = genCode(name, randomSuffix())
+      newCode = genCode(name)
       result = await createStudentCode(name, email, newCode)
     }
     setCreating(false)
