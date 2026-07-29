@@ -184,18 +184,21 @@ export default function CohortSetup() {
     e.preventDefault()
     setCreatingGroup(true)
     setGroupError('')
-    const { error } = await supabase.from('peer_groups').insert({
-      cohort_id: activeCohort.id,
-      label:     groupForm.label.trim(),
-      track:     groupForm.track,
-    })
+    const { data: newGroup, error } = await supabase
+      .from('peer_groups')
+      .insert({ cohort_id: activeCohort.id, label: groupForm.label.trim() })
+      .select()
+      .single()
     if (error) {
-      setGroupError(error.message.includes('track')
-        ? 'Run supabase/add_group_track.sql in Supabase first — the track column is missing.'
-        : error.message)
-    } else {
-      setGroupForm(f => ({ ...f, label: '' }))
+      setGroupError(error.message)
+      setCreatingGroup(false)
+      return
     }
+    // Set track separately — silent no-op if track column doesn't exist yet
+    if (newGroup && groupForm.track) {
+      await supabase.from('peer_groups').update({ track: groupForm.track }).eq('id', newGroup.id)
+    }
+    setGroupForm(f => ({ ...f, label: '' }))
     setCreatingGroup(false)
     await loadGroups(activeCohort.id)
   }
