@@ -50,6 +50,7 @@ export default function CohortSetup() {
   const [assigningId, setAssigningId]     = useState(null)
   const [renamingId, setRenamingId]       = useState(null)
   const [renameValue, setRenameValue]     = useState('')
+  const [groupError, setGroupError]       = useState('')
 
   // Bulk student import
   const bulkFileRef = useRef()
@@ -182,12 +183,19 @@ export default function CohortSetup() {
   async function createGroup(e) {
     e.preventDefault()
     setCreatingGroup(true)
-    await supabase.from('peer_groups').insert({
+    setGroupError('')
+    const { error } = await supabase.from('peer_groups').insert({
       cohort_id: activeCohort.id,
       label:     groupForm.label.trim(),
       track:     groupForm.track,
     })
-    setGroupForm(f => ({ ...f, label: '' }))
+    if (error) {
+      setGroupError(error.message.includes('track')
+        ? 'Run supabase/add_group_track.sql in Supabase first — the track column is missing.'
+        : error.message)
+    } else {
+      setGroupForm(f => ({ ...f, label: '' }))
+    }
     setCreatingGroup(false)
     await loadGroups(activeCohort.id)
   }
@@ -619,6 +627,12 @@ export default function CohortSetup() {
                 {creatingGroup ? 'Creating…' : '+ Add group'}
               </Button>
             </form>
+
+            {groupError && (
+              <div className="mt-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+                {groupError}
+              </div>
+            )}
 
             {/* Groups chips */}
             {groups.length > 0 && (
