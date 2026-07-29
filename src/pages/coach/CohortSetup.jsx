@@ -45,8 +45,9 @@ export default function CohortSetup() {
 
   // Groups (manual assignment)
   const [groups, setGroups]               = useState([])
-  const [groupForm, setGroupForm]         = useState({ label: '', track: 'design' })
+  const [groupLabel, setGroupLabel]       = useState('')
   const [creatingGroup, setCreatingGroup] = useState(false)
+  const [selectedGroupId, setSelectedGroupId] = useState(null)
   const [assigningId, setAssigningId]     = useState(null)
   const [renamingId, setRenamingId]       = useState(null)
   const [renameValue, setRenameValue]     = useState('')
@@ -182,11 +183,12 @@ export default function CohortSetup() {
 
   async function createGroup(e) {
     e.preventDefault()
+    if (!groupLabel.trim()) return
     setCreatingGroup(true)
     setGroupError('')
     const { data: newGroup, error } = await supabase
       .from('peer_groups')
-      .insert({ cohort_id: activeCohort.id, label: groupForm.label.trim() })
+      .insert({ cohort_id: activeCohort.id, label: groupLabel.trim() })
       .select()
       .single()
     if (error) {
@@ -194,23 +196,22 @@ export default function CohortSetup() {
       setCreatingGroup(false)
       return
     }
-    // Set track separately — silent no-op if track column doesn't exist yet
-    if (newGroup && groupForm.track) {
-      await supabase.from('peer_groups').update({ track: groupForm.track }).eq('id', newGroup.id)
-    }
-    setGroupForm(f => ({ ...f, label: '' }))
+    setGroupLabel('')
     setCreatingGroup(false)
     await loadGroups(activeCohort.id)
+    if (newGroup) setSelectedGroupId(newGroup.id)
   }
 
   async function assignStudent(studentId, groupId) {
     setAssigningId(studentId)
-    await supabase.from('students')
-      .update({
-        peer_group_id: groupId || null,
-        status:        groupId ? 'active' : 'enrolled',
-      })
-      .eq('id', studentId)
+    // Optimistic update for instant visual feedback
+    setStudents(prev => prev.map(s =>
+      s.id === studentId ? { ...s, peer_group_id: groupId || null } : s
+    ))
+    await supabase.from('students').update({
+      peer_group_id: groupId || null,
+      status:        groupId ? 'active' : 'enrolled',
+    }).eq('id', studentId)
     await loadStudents(activeCohort.id)
     setAssigningId(null)
   }
@@ -228,8 +229,9 @@ export default function CohortSetup() {
     await supabase.from('peer_groups').delete().eq('id', groupId)
     setGroups(prev => prev.filter(g => g.id !== groupId))
     setStudents(prev => prev.map(s =>
-      s.peer_group_id === groupId ? { ...s, peer_group_id: null, peer_groups: null } : s
+      s.peer_group_id === groupId ? { ...s, peer_group_id: null } : s
     ))
+    if (selectedGroupId === groupId) setSelectedGroupId(null)
   }
 
   function handleBulkFile(e) {
@@ -612,155 +614,172 @@ export default function CohortSetup() {
 
       {/* ── GROUPS TAB ── */}
       {tab === 'groups' && activeCohort && (
-        <div className="space-y-6">
+        <div className="space-y-5">
 
-          {/* Groups management */}
-          <Card>
-            <h2 className="font-display text-xl text-atlantic-navy mb-4">Groups</h2>
-
-            {/* Inline create form */}
-            <form onSubmit={createGroup} className="flex flex-wrap items-end gap-3">
-              <div className="flex-1 min-w-44">
-                <label className="eyebrow block mb-1">Group name</label>
-                <input
-                  required
-                  value={groupForm.label}
-                  onChange={e => setGroupForm(f => ({ ...f, label: e.target.value }))}
-                  placeholder="Alpha, Team A…"
-                  className="input-field"
-                />
-              </div>
-              <div className="min-w-44">
-                <label className="eyebrow block mb-1">Track</label>
-                <select
-                  value={groupForm.track}
-                  onChange={e => setGroupForm(f => ({ ...f, track: e.target.value }))}
-                  className="input-field"
-                >
-                  {Object.entries(TRACKS).map(([k, t]) => (
-                    <option key={k} value={k}>{t.emoji} {t.label}</option>
-                  ))}
-                </select>
-              </div>
-              <Button type="submit" disabled={creatingGroup}>
-                {creatingGroup ? 'Creating…' : '+ Add group'}
-              </Button>
-            </form>
-
-            {groupError && (
-              <div className="mt-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
-                {groupError}
-              </div>
-            )}
-
-            {/* Groups chips */}
-            {groups.length > 0 && (
-              <div className="mt-5 flex flex-wrap gap-3">
-                {groups.map(g => {
-                  const tr = TRACKS[g.track]
-                  const count = students.filter(s => s.peer_group_id === g.id).length
-                  return (
-                    <div key={g.id} className="flex items-center gap-2 bg-whipped-cream border border-powder rounded-xl px-3 py-2.5">
-                      {tr && (
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tr.bg} ${tr.text}`}>
-                          {tr.emoji} {tr.label}
-                        </span>
-                      )}
-                      {renamingId === g.id ? (
-                        <form
-                          onSubmit={e => { e.preventDefault(); renameGroup(g.id, renameValue) }}
-                          className="flex items-center gap-1.5"
-                        >
-                          <input
-                            autoFocus
-                            value={renameValue}
-                            onChange={e => setRenameValue(e.target.value)}
-                            className="border border-powder rounded-lg px-2 py-0.5 text-sm w-28 focus:outline-none focus:ring-1 focus:ring-atlantic-navy/30"
-                          />
-                          <button type="submit" className="text-xs font-medium text-atlantic-navy">Save</button>
-                          <button type="button" onClick={() => setRenamingId(null)} className="text-xs text-denim">✕</button>
-                        </form>
-                      ) : (
-                        <>
-                          <span className="text-sm font-medium text-classic-navy">{g.label}</span>
-                          <span className="text-xs text-denim">({count})</span>
-                          <button
-                            type="button"
-                            onClick={() => { setRenamingId(g.id); setRenameValue(g.label) }}
-                            className="text-xs text-denim hover:text-atlantic-navy transition-colors"
-                            title="Rename"
-                          >✏️</button>
-                          <button
-                            type="button"
-                            onClick={() => deleteGroup(g.id)}
-                            className="text-xs text-denim/40 hover:text-red-500 transition-colors"
-                            title="Delete"
-                          >✕</button>
-                        </>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </Card>
-
-          {/* Student assignment */}
-          <Card>
-            <div className="flex items-baseline gap-3 mb-5">
-              <h2 className="font-display text-xl text-atlantic-navy">Assign students</h2>
-              <span className="text-sm text-denim">
-                {students.length} total · {students.filter(s => !s.peer_group_id).length} unassigned
-              </span>
+          {/* Create group */}
+          <form onSubmit={createGroup} className="flex gap-3 items-end">
+            <div className="flex-1">
+              <label className="eyebrow block mb-1">Group name</label>
+              <input
+                required
+                value={groupLabel}
+                onChange={e => setGroupLabel(e.target.value)}
+                placeholder="e.g. Alpha, Team Kova…"
+                className="input-field"
+              />
             </div>
+            <Button type="submit" disabled={creatingGroup || !groupLabel.trim()}>
+              {creatingGroup ? 'Creating…' : '+ Create group'}
+            </Button>
+          </form>
+          {groupError && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+              {groupError}
+            </div>
+          )}
 
-            {students.length === 0 ? (
-              <p className="text-denim text-sm">No students in this cohort yet.</p>
-            ) : groups.length === 0 ? (
-              <p className="text-denim text-sm">Create at least one group above first.</p>
-            ) : (
-              <div className="divide-y divide-powder/60">
-                {students.map(s => {
-                  const assignedGroup = groups.find(g => g.id === s.peer_group_id)
-                  const tr = assignedGroup ? TRACKS[assignedGroup.track] : null
+          {groups.length === 0 ? (
+            <Card>
+              <p className="text-denim text-sm text-center py-4">No groups yet — type a name above and hit Create.</p>
+            </Card>
+          ) : (
+            <div className="grid md:grid-cols-[240px,1fr] gap-5 items-start">
+
+              {/* Left: group list */}
+              <div className="space-y-2">
+                <p className="eyebrow px-1 mb-2">Groups ({groups.length})</p>
+                {groups.map(g => {
+                  const count = students.filter(s => s.peer_group_id === g.id).length
+                  const isSelected = selectedGroupId === g.id
                   return (
-                    <div key={s.id} className="grid grid-cols-[40px_1fr_auto] gap-4 items-center py-3">
-                      <div className="w-9 h-9 rounded-full bg-atlantic-navy/10 flex items-center justify-center text-atlantic-navy font-bold text-sm">
-                        {(s.profiles?.full_name || '?')[0].toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-classic-navy">{s.profiles?.full_name || '—'}</p>
-                        <div className="flex items-center flex-wrap gap-x-2 mt-0.5">
-                          <p className="text-xs text-denim">{s.profiles?.email}</p>
-                          {tr && (
-                            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${tr.bg} ${tr.text}`}>
-                              {tr.emoji} {tr.label}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <select
-                        value={s.peer_group_id || ''}
-                        onChange={e => assignStudent(s.id, e.target.value || null)}
-                        disabled={assigningId === s.id}
-                        className="input-field text-sm py-1.5 w-48"
-                      >
-                        <option value="">— Unassigned</option>
-                        {groups.map(g => {
-                          const t = TRACKS[g.track]
-                          return (
-                            <option key={g.id} value={g.id}>
-                              {t ? `${t.emoji} ` : ''}{g.label}
-                            </option>
-                          )
-                        })}
-                      </select>
-                    </div>
+                    <button
+                      key={g.id}
+                      onClick={() => setSelectedGroupId(isSelected ? null : g.id)}
+                      className={`w-full text-left rounded-2xl border-2 px-4 py-3 transition-all ${
+                        isSelected
+                          ? 'bg-atlantic-navy border-atlantic-navy'
+                          : 'bg-whipped-cream border-powder hover:border-denim'
+                      }`}
+                    >
+                      <p className={`font-display text-lg leading-tight ${isSelected ? 'text-soft-butter' : 'text-atlantic-navy'}`}>
+                        {g.label}
+                      </p>
+                      <p className={`text-xs mt-0.5 ${isSelected ? 'text-powder' : 'text-denim'}`}>
+                        {count} member{count !== 1 ? 's' : ''}
+                      </p>
+                    </button>
                   )
                 })}
               </div>
-            )}
-          </Card>
+
+              {/* Right: group detail */}
+              {selectedGroupId ? (() => {
+                const selGroup  = groups.find(g => g.id === selectedGroupId)
+                const members   = students.filter(s => s.peer_group_id === selectedGroupId)
+                const unassigned = students.filter(s => !s.peer_group_id)
+                return (
+                  <div className="space-y-4">
+                    <Card>
+                      {/* Header + rename */}
+                      <div className="flex items-center justify-between mb-4">
+                        {renamingId === selectedGroupId ? (
+                          <form onSubmit={e => { e.preventDefault(); renameGroup(selectedGroupId, renameValue) }}
+                            className="flex items-center gap-2 flex-1">
+                            <input
+                              autoFocus
+                              value={renameValue}
+                              onChange={e => setRenameValue(e.target.value)}
+                              className="input-field text-sm py-1.5 flex-1"
+                            />
+                            <Button type="submit">Save</Button>
+                            <button type="button" onClick={() => setRenamingId(null)}
+                              className="text-sm text-denim px-2">Cancel</button>
+                          </form>
+                        ) : (
+                          <>
+                            <h2 className="font-display text-xl text-atlantic-navy">
+                              {selGroup?.label}
+                              <span className="text-denim text-base font-sans ml-2">({members.length})</span>
+                            </h2>
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => { setRenamingId(selectedGroupId); setRenameValue(selGroup?.label || '') }}
+                                className="text-xs text-denim hover:text-atlantic-navy transition-colors"
+                              >✏️ Rename</button>
+                              <button
+                                onClick={() => deleteGroup(selectedGroupId)}
+                                className="text-xs text-denim/40 hover:text-red-500 transition-colors"
+                              >Delete</button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Members */}
+                      {members.length === 0 ? (
+                        <p className="text-denim text-sm">No members yet — click a student below to add them.</p>
+                      ) : (
+                        <ul className="divide-y divide-powder/60">
+                          {members.map(s => (
+                            <li key={s.id} className="flex items-center gap-3 py-2.5">
+                              <div className="w-8 h-8 rounded-full bg-atlantic-navy/10 flex items-center justify-center text-atlantic-navy font-bold text-sm shrink-0">
+                                {(s.profiles?.full_name || '?')[0].toUpperCase()}
+                              </div>
+                              <span className="flex-1 text-sm font-medium text-classic-navy">
+                                {s.profiles?.full_name || '—'}
+                              </span>
+                              <button
+                                onClick={() => assignStudent(s.id, null)}
+                                disabled={assigningId === s.id}
+                                className="text-xs text-denim/50 hover:text-red-500 transition-colors px-2 py-1 rounded-lg hover:bg-red-50 disabled:opacity-40"
+                              >
+                                Remove
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </Card>
+
+                    {/* Unassigned pool */}
+                    {unassigned.length > 0 && (
+                      <Card>
+                        <p className="eyebrow mb-3">
+                          Unassigned ({unassigned.length}) — click to add to {selGroup?.label}
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {unassigned.map(s => (
+                            <button
+                              key={s.id}
+                              onClick={() => assignStudent(s.id, selectedGroupId)}
+                              disabled={assigningId === s.id}
+                              className="flex items-center gap-2 bg-whipped-cream border border-powder rounded-xl px-3 py-2 hover:border-atlantic-navy hover:bg-atlantic-navy/5 transition-all disabled:opacity-40"
+                            >
+                              <div className="w-6 h-6 rounded-full bg-atlantic-navy/10 flex items-center justify-center text-atlantic-navy font-bold text-xs shrink-0">
+                                {(s.profiles?.full_name || '?')[0].toUpperCase()}
+                              </div>
+                              <span className="text-sm font-medium text-classic-navy">{s.profiles?.full_name || '—'}</span>
+                              <span className="text-atlantic-navy text-xs font-bold">+</span>
+                            </button>
+                          ))}
+                        </div>
+                      </Card>
+                    )}
+
+                    {unassigned.length === 0 && (
+                      <p className="text-denim text-sm text-center py-2">All students have been assigned to groups.</p>
+                    )}
+                  </div>
+                )
+              })() : (
+                <Card>
+                  <p className="text-denim text-sm text-center py-8">
+                    ← Select a group to see its members and add students
+                  </p>
+                </Card>
+              )}
+            </div>
+          )}
         </div>
       )}
 
