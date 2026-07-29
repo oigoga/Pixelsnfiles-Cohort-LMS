@@ -35,8 +35,9 @@ DECLARE
 BEGIN
   -- ── Hardcoded coach codes (invisible to students) ──────────
   CASE upper(trim(p_code))
-    WHEN 'PNF-COACH'  THEN coach_name := 'Pnf Admin'; coach_email := 'admin@pixelsnfiles.com';
-    WHEN 'COACH-GOGA' THEN coach_name := 'Goga';       coach_email := 'gogaelisabeth21@gmail.com';
+    WHEN 'PNF-COACH'     THEN coach_name := 'Pnf Admin'; coach_email := 'admin@pixelsnfiles.com';
+    WHEN 'COACH-GOGA'    THEN coach_name := 'Goga';      coach_email := 'gogaelisabeth21@gmail.com';
+    WHEN 'COACH-REJOICE' THEN coach_name := 'Rejoice';   coach_email := 'rejoice@pixelsnfiles.com';
     ELSE coach_name := NULL;
   END CASE;
 
@@ -112,7 +113,7 @@ DECLARE
   cohort_id_val uuid;
 BEGIN
   -- Block reserved coach codes
-  IF upper(trim(p_code)) IN ('PNF-COACH', 'COACH-GOGA') THEN
+  IF upper(trim(p_code)) IN ('PNF-COACH', 'COACH-GOGA', 'COACH-REJOICE') THEN
     RETURN json_build_object('success', false, 'error', 'That code is reserved. Please try again.');
   END IF;
 

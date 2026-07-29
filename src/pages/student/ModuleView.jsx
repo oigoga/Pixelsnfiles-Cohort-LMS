@@ -9,6 +9,26 @@ import { Spinner } from '../../components/ui/Spinner'
 
 const resourceIcons = { video: '🎥', doc: '📄', link: '🔗' }
 
+function getEmbedSrc(url) {
+  if (!url) return null
+  try {
+    const u = new URL(url)
+    // YouTube
+    const ytId = u.searchParams.get('v') || url.match(/youtu\.be\/([A-Za-z0-9_-]{11})/)?.[1]
+    if (ytId) return `https://www.youtube.com/embed/${ytId}?rel=0`
+    // Loom
+    const loomId = url.match(/loom\.com\/share\/([a-f0-9]+)/)?.[1]
+    if (loomId) return `https://www.loom.com/embed/${loomId}`
+    // Google Drive file
+    const driveFileId = url.match(/drive\.google\.com\/file\/d\/([^/?]+)/)?.[1]
+    if (driveFileId) return `https://drive.google.com/file/d/${driveFileId}/preview`
+    // Google Docs / Sheets / Slides
+    const docsMatch = url.match(/docs\.google\.com\/(document|spreadsheets|presentation)\/d\/([^/?]+)/)
+    if (docsMatch) return `https://docs.google.com/${docsMatch[1]}/d/${docsMatch[2]}/preview`
+  } catch {}
+  return null
+}
+
 const TRACK = {
   AO: { label: 'Admin & Ops',  bg: '#dbeafe', color: '#1d4ed8', emoji: '⚙️' },
   MK: { label: 'Marketing',    bg: '#ede9fe', color: '#6d28d9', emoji: '📣' },
@@ -30,6 +50,7 @@ export default function ModuleView() {
   const [tasks, setTasks] = useState([])
   const [submissions, setSubmissions] = useState({})
   const [pinnedAnnouncements, setPinnedAnnouncements] = useState([])
+  const [activePreview, setActivePreview] = useState(null)
 
   useEffect(() => { load() }, [moduleId])
 
@@ -107,33 +128,73 @@ export default function ModuleView() {
         </div>
       ))}
 
-      {/* Recording + Resources — horizontal strip */}
-      {(mod.session_recording_url || resources.length > 0) && (
-        <div className="flex flex-wrap gap-3">
-          {mod.session_recording_url && (
-            <a
-              href={mod.session_recording_url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 bg-atlantic-navy/5 border border-atlantic-navy/20 rounded-xl px-4 py-2.5 text-sm font-semibold text-atlantic-navy hover:bg-atlantic-navy/10 transition-colors"
-            >
-              🎥 Session recording
-            </a>
-          )}
-          {resources.map(r => (
-            <a
-              key={r.id}
-              href={r.url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 bg-white border border-powder rounded-xl px-4 py-2.5 text-sm font-medium text-atlantic-navy hover:border-denim hover:shadow-sm transition-all"
-            >
-              <span>{resourceIcons[r.type] || '🔗'}</span>
-              <span>{r.label}</span>
-            </a>
-          ))}
-        </div>
-      )}
+      {/* Recording + Resources */}
+      {(mod.session_recording_url || resources.length > 0) && (() => {
+        const allRes = [
+          ...(mod.session_recording_url
+            ? [{ id: '__recording__', label: 'Session recording', url: mod.session_recording_url, type: 'video' }]
+            : []),
+          ...resources,
+        ]
+        const activeSrc = activePreview ? getEmbedSrc(allRes.find(r => r.id === activePreview)?.url) : null
+        const activeLabel = allRes.find(r => r.id === activePreview)?.label
+
+        return (
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-3">
+              {allRes.map(r => {
+                const canEmbed = !!getEmbedSrc(r.url)
+                const isActive = activePreview === r.id
+                const isRecording = r.id === '__recording__'
+                const baseClass = `inline-flex items-center rounded-xl border text-sm font-medium transition-all`
+                const colorClass = isActive
+                  ? 'bg-atlantic-navy border-atlantic-navy text-soft-butter shadow-sm'
+                  : isRecording
+                  ? 'bg-atlantic-navy/5 border-atlantic-navy/20 text-atlantic-navy hover:bg-atlantic-navy/10'
+                  : 'bg-white border-powder text-atlantic-navy hover:border-denim hover:shadow-sm'
+
+                return (
+                  <div key={r.id} className={`${baseClass} ${colorClass}`}>
+                    <a
+                      href={r.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-2 pl-4 py-2.5"
+                    >
+                      <span>{resourceIcons[r.type] || '🔗'}</span>
+                      <span>{r.label}</span>
+                    </a>
+                    {canEmbed ? (
+                      <button
+                        onClick={() => setActivePreview(isActive ? null : r.id)}
+                        className={`pl-1.5 pr-3 py-2.5 transition-colors ${isActive ? 'text-powder hover:text-white' : 'text-denim hover:text-atlantic-navy'}`}
+                        title={isActive ? 'Close preview' : 'Preview'}
+                      >
+                        {isActive ? '✕' : '▾'}
+                      </button>
+                    ) : (
+                      <span className="pr-3" />
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {activePreview && activeSrc && (
+              <div className="rounded-2xl overflow-hidden border border-powder bg-black" style={{ aspectRatio: '16/9' }}>
+                <iframe
+                  key={activePreview}
+                  src={activeSrc}
+                  className="w-full h-full"
+                  allowFullScreen
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  title={activeLabel}
+                />
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Overview */}
       {mod.overview && (

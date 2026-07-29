@@ -5,7 +5,12 @@ import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { StatusBadge } from '../../components/ui/StatusBadge'
-import { assignGroups } from '../../utils/groupAssignment'
+const TRACKS = {
+  design:    { label: 'Design',      emoji: '🎨', bg: 'bg-purple-100', text: 'text-purple-800' },
+  marketing: { label: 'Marketing',   emoji: '📣', bg: 'bg-pink-100',   text: 'text-pink-800'   },
+  ao:        { label: 'Admin & Ops', emoji: '⚙️', bg: 'bg-blue-100',   text: 'text-blue-800'   },
+  get_hired: { label: 'Get Hired',   emoji: '🚀', bg: 'bg-green-100',  text: 'text-green-800'  },
+}
 
 function genCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -19,7 +24,7 @@ export default function CohortSetup() {
   const [activeCohort, setActiveCohort] = useState(null)
   const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('cohort') // cohort | students | codes | import
+  const [tab, setTab] = useState('cohort') // cohort | students | groups | codes | import
   const fileRef = useRef()
 
   // New cohort form
@@ -33,12 +38,24 @@ export default function CohortSetup() {
   const [creatingCode, setCreatingCode] = useState(false)
   const [copiedId, setCopiedId] = useState(null)
 
-  // (legacy enrol form — kept for group-assign flow)
+  // (legacy enrol form)
   const [enrolEmail, setEnrolEmail] = useState('')
   const [enrolName, setEnrolName] = useState('')
   const [enrolling, setEnrolling] = useState(false)
 
-  // Import
+  // Groups (manual assignment)
+  const [groups, setGroups]           = useState([])
+  const [groupForm, setGroupForm]     = useState({ label: '', track: 'design' })
+  const [creatingGroup, setCreatingGroup] = useState(false)
+  const [assigningId, setAssigningId] = useState(null)
+
+  // Bulk student import
+  const bulkFileRef = useRef()
+  const [bulkRows, setBulkRows]         = useState([])
+  const [bulkImporting, setBulkImporting] = useState(false)
+  const [bulkResult, setBulkResult]     = useState(null)
+
+  // Task import (CSV)
   const [importRows, setImportRows] = useState([])
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState(null)
@@ -48,6 +65,7 @@ export default function CohortSetup() {
     if (activeCohort) {
       loadStudents(activeCohort.id)
       loadCodes(activeCohort.id)
+      loadGroups(activeCohort.id)
     }
   }, [activeCohort])
 
@@ -132,79 +150,158 @@ export default function CohortSetup() {
   async function enrolStudent(e) {
     e.preventDefault()
     setEnrolling(true)
-
-    // 1. Send magic link / ensure user exists via admin invite (Supabase admin API not available client-side)
-    // We create the profile row directly; the student will sign in via magic link themselves
-    // First check if profile already exists
     const { data: existing } = await supabase
       .from('profiles')
       .select('id')
       .eq('email', enrolEmail)
       .single()
-
     let profileId = existing?.id
-
     if (!profileId) {
-      // Create auth user via magic link — they'll get the link on first login
-      const { data: authData, error: authError } = await supabase.auth.admin?.inviteUserByEmail
-        ? await supabase.auth.admin.inviteUserByEmail(enrolEmail, { data: { full_name: enrolName } })
-        : { data: null, error: { message: 'Use Supabase dashboard to invite users or they can sign up via the login page.' } }
-
-      if (authError) {
-        alert(`Note: ${authError.message}\n\nThe student can sign in via the magic link on the login page once they visit it.`)
-        // Still create a placeholder — they'll get matched when they first log in
-        setEnrolling(false)
-        return
-      }
-      profileId = authData?.user?.id
+      alert('No profile found with that email. Make sure the student has logged in with their access code first.')
+      setEnrolling(false)
+      return
     }
-
-    if (profileId) {
-      // Ensure student row
-      await supabase.from('students').upsert({
-        profile_id: profileId,
-        cohort_id: activeCohort.id,
-        status: 'enrolled',
-      }, { onConflict: 'profile_id,cohort_id' })
-
-      await loadStudents(activeCohort.id)
-    }
-
+    await supabase.from('students').upsert({
+      profile_id: profileId,
+      cohort_id: activeCohort.id,
+      status: 'enrolled',
+    }, { onConflict: 'profile_id,cohort_id' })
+    await loadStudents(activeCohort.id)
     setEnrolName('')
     setEnrolEmail('')
     setEnrolling(false)
   }
 
-  async function handleAssignGroups() {
-    if (!confirm('Auto-assign peer groups? Any existing group assignments will be replaced.')) return
+  async function loadGroups(cohortId) {
+    const { data } = await supabase.from('peer_groups').select('*').eq('cohort_id', cohortId).order('created_at')
+    setGroups(data || [])
+  }
 
-    const enrolled = students.filter(s => s.status === 'enrolled' || s.status === 'active')
-    if (enrolled.length < 2) {
-      alert('Need at least 2 enrolled students to assign groups.')
-      return
-    }
+  async function createGroup(e) {
+    e.preventDefault()
+    setCreatingGroup(true)
+    await supabase.from('peer_groups').insert({
+      cohort_id: activeCohort.id,
+      label:     groupForm.label.trim(),
+      track:     groupForm.track,
+    })
+    setGroupForm(f => ({ ...f, label: '' }))
+    setCreatingGroup(false)
+    await loadGroups(activeCohort.id)
+  }
 
-    // Clear existing groups for this cohort first
-    await supabase.from('peer_groups').delete().eq('cohort_id', activeCohort.id)
+  async function assignStudent(studentId, groupId) {
+    setAssigningId(studentId)
+    await supabase.from('students')
+      .update({
+        peer_group_id: groupId || null,
+        status:        groupId ? 'active' : 'enrolled',
+      })
+      .eq('id', studentId)
+    const grp = groups.find(g => g.id === groupId)
+    setStudents(prev => prev.map(s =>
+      s.id === studentId
+        ? { ...s, peer_group_id: groupId || null, peer_groups: grp ? { label: grp.label } : null }
+        : s
+    ))
+    setAssigningId(null)
+  }
 
-    const groups = assignGroups(enrolled)
+  async function deleteGroup(groupId) {
+    if (!confirm('Delete this group? Students will be moved to unassigned.')) return
+    await supabase.from('students').update({ peer_group_id: null, status: 'enrolled' }).eq('peer_group_id', groupId)
+    await supabase.from('peer_groups').delete().eq('id', groupId)
+    setGroups(prev => prev.filter(g => g.id !== groupId))
+    setStudents(prev => prev.map(s =>
+      s.peer_group_id === groupId ? { ...s, peer_group_id: null, peer_groups: null } : s
+    ))
+  }
 
-    for (let i = 0; i < groups.length; i++) {
-      const { data: pg } = await supabase
-        .from('peer_groups')
-        .insert({ cohort_id: activeCohort.id, label: `Group ${i + 1}` })
-        .select()
-        .single()
+  function handleBulkFile(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => setBulkRows(results.data),
+    })
+    e.target.value = ''
+  }
 
-      for (const student of groups[i]) {
-        await supabase
-          .from('students')
-          .update({ peer_group_id: pg.id, status: 'active' })
-          .eq('id', student.id)
+  async function importStudents() {
+    if (!activeCohort || !bulkRows.length) return
+    setBulkImporting(true)
+    setBulkResult(null)
+
+    // Existing codes for this cohort (duplicate email check)
+    const { data: existing } = await supabase
+      .from('access_codes')
+      .select('email, code')
+      .eq('cohort_id', activeCohort.id)
+
+    const existingByEmail = {}
+    ;(existing || []).forEach(c => { existingByEmail[c.email.toLowerCase()] = c.code })
+
+    // All codes across all cohorts (collision check)
+    const { data: allCodes } = await supabase.from('access_codes').select('code')
+    const usedCodes = new Set((allCodes || []).map(c => c.code.toUpperCase()))
+
+    const results = []
+
+    for (const row of bulkRows) {
+      const full_name = (row['Full name'] || row['Name'] || row['full_name'] || row['name'] || '').trim()
+      const email     = (row['Email'] || row['email'] || '').trim().toLowerCase()
+
+      if (!full_name || !email) {
+        results.push({ full_name, email, code: null, note: 'Missing name or email' })
+        continue
       }
+
+      if (existingByEmail[email] !== undefined) {
+        results.push({ full_name, email, code: existingByEmail[email], note: 'Already has a code' })
+        continue
+      }
+
+      // Generate a collision-free code
+      let code, attempts = 0
+      do { code = genCode(); attempts++ } while (usedCodes.has(code) && attempts < 30)
+      usedCodes.add(code)
+      existingByEmail[email] = code
+
+      const { error } = await supabase.from('access_codes').insert({
+        code,
+        full_name,
+        email,
+        role: 'student',
+        cohort_id: activeCohort.id,
+      })
+
+      results.push(error
+        ? { full_name, email, code: null, note: error.message }
+        : { full_name, email, code, note: 'Created' }
+      )
     }
 
-    await loadStudents(activeCohort.id)
+    setBulkImporting(false)
+    setBulkResult(results)
+    setBulkRows([])
+    await loadCodes(activeCohort.id)
+  }
+
+  function downloadResultsCsv() {
+    if (!bulkResult) return
+    const header = 'Full name,Email,Access code,Note'
+    const rows = bulkResult.map(r =>
+      `"${r.full_name}","${r.email}","${r.code || ''}","${r.note}"`
+    )
+    const csv = [header, ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `${activeCohort.name.replace(/\s+/g, '_')}_access_codes.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   function handleFileChange(e) {
@@ -329,10 +426,11 @@ export default function CohortSetup() {
       {/* Tabs */}
       <div className="flex gap-1 border-b border-powder">
         {[
-          { key: 'cohort', label: 'Cohort' },
+          { key: 'cohort',   label: 'Cohort' },
           { key: 'students', label: 'Students' },
-          { key: 'codes', label: 'Access Codes' },
-          { key: 'import', label: 'Import Tasks' },
+          { key: 'groups',   label: 'Groups' },
+          { key: 'codes',    label: 'Access Codes' },
+          { key: 'import',   label: 'Import Tasks' },
         ].map(t => (
           <button
             key={t.key}
@@ -402,9 +500,9 @@ export default function CohortSetup() {
               <Button
                 variant="secondary"
                 className="mt-5 w-full"
-                onClick={handleAssignGroups}
+                onClick={() => setTab('groups')}
               >
-                Assign groups
+                Manage groups →
               </Button>
             </Card>
           )}
@@ -481,6 +579,131 @@ export default function CohortSetup() {
         </div>
       )}
 
+      {/* ── GROUPS TAB ── */}
+      {tab === 'groups' && activeCohort && (
+        <div className="grid md:grid-cols-[280px,1fr] gap-6 items-start">
+
+          {/* Left: create + list groups */}
+          <div className="space-y-4">
+            <Card>
+              <h2 className="font-display text-xl text-atlantic-navy mb-4">Create group</h2>
+              <form onSubmit={createGroup} className="space-y-3">
+                <div>
+                  <label className="eyebrow block mb-1">Group name</label>
+                  <input
+                    required
+                    value={groupForm.label}
+                    onChange={e => setGroupForm(f => ({ ...f, label: e.target.value }))}
+                    placeholder="e.g. Alpha, Team A…"
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="eyebrow block mb-1">Track</label>
+                  <select
+                    value={groupForm.track}
+                    onChange={e => setGroupForm(f => ({ ...f, track: e.target.value }))}
+                    className="input-field"
+                  >
+                    {Object.entries(TRACKS).map(([k, t]) => (
+                      <option key={k} value={k}>{t.emoji} {t.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <Button type="submit" disabled={creatingGroup}>
+                  {creatingGroup ? 'Creating…' : 'Create group'}
+                </Button>
+              </form>
+            </Card>
+
+            {groups.length > 0 && (
+              <div className="space-y-2">
+                <p className="eyebrow px-1">Groups ({groups.length})</p>
+                {groups.map(g => {
+                  const tr = TRACKS[g.track]
+                  const count = students.filter(s => s.peer_group_id === g.id).length
+                  return (
+                    <div key={g.id} className="bg-white border border-powder rounded-2xl p-4 flex items-start justify-between gap-2">
+                      <div>
+                        {tr && (
+                          <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full mb-1 ${tr.bg} ${tr.text}`}>
+                            {tr.emoji} {tr.label}
+                          </span>
+                        )}
+                        <p className="font-display text-lg text-atlantic-navy leading-tight">{g.label}</p>
+                        <p className="text-xs text-denim mt-0.5">{count} student{count !== 1 ? 's' : ''}</p>
+                      </div>
+                      <button
+                        onClick={() => deleteGroup(g.id)}
+                        className="text-xs text-denim/50 hover:text-red-500 transition-colors shrink-0 mt-1"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Right: assign students */}
+          <Card>
+            <h2 className="font-display text-xl text-atlantic-navy mb-1">
+              Assign students
+              <span className="text-denim text-base font-sans ml-2">({students.length})</span>
+            </h2>
+            <p className="text-sm text-denim mb-5">
+              {groups.length === 0
+                ? 'Create a group on the left first.'
+                : 'Pick a group for each student. Changes save instantly.'}
+            </p>
+
+            {students.length === 0 ? (
+              <p className="text-denim text-sm">No students in this cohort yet.</p>
+            ) : (
+              <div className="divide-y divide-powder/60">
+                {students.map(s => {
+                  const assignedGroup = groups.find(g => g.id === s.peer_group_id)
+                  const tr = assignedGroup ? TRACKS[assignedGroup.track] : null
+                  return (
+                    <div key={s.id} className="flex items-center gap-4 py-3">
+                      <div className="w-9 h-9 rounded-full bg-atlantic-navy/10 flex items-center justify-center text-atlantic-navy font-bold text-sm shrink-0">
+                        {(s.profiles?.full_name || '?')[0].toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-classic-navy truncate">{s.profiles?.full_name || '—'}</p>
+                        <p className="text-xs text-denim truncate">{s.profiles?.email}</p>
+                      </div>
+                      {tr && (
+                        <span className={`hidden sm:inline-block text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${tr.bg} ${tr.text}`}>
+                          {tr.emoji}
+                        </span>
+                      )}
+                      <select
+                        value={s.peer_group_id || ''}
+                        onChange={e => assignStudent(s.id, e.target.value || null)}
+                        disabled={assigningId === s.id || groups.length === 0}
+                        className="input-field text-sm py-1.5 min-w-[160px] shrink-0"
+                      >
+                        <option value="">— Unassigned</option>
+                        {groups.map(g => {
+                          const t = TRACKS[g.track]
+                          return (
+                            <option key={g.id} value={g.id}>
+                              {t ? `${t.emoji} ` : ''}{g.label}
+                            </option>
+                          )
+                        })}
+                      </select>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
       {/* ── ACCESS CODES TAB ── */}
       {tab === 'codes' && activeCohort && (
         <div className="space-y-6">
@@ -526,6 +749,102 @@ export default function CohortSetup() {
                 {creatingCode ? 'Generating…' : 'Generate code'}
               </Button>
             </form>
+          </Card>
+
+          {/* Bulk import */}
+          <Card>
+            <h2 className="font-display text-xl text-atlantic-navy mb-1">Bulk import students</h2>
+            <p className="text-sm text-denim mb-4">
+              Upload a CSV with columns <strong>Full name</strong> and <strong>Email</strong>. A unique code is
+              generated for each student. Download the results to send codes out.
+            </p>
+
+            <input ref={bulkFileRef} type="file" accept=".csv" className="hidden" onChange={handleBulkFile} />
+
+            {bulkRows.length === 0 && !bulkResult && (
+              <Button variant="secondary" onClick={() => bulkFileRef.current.click()}>
+                Choose CSV file
+              </Button>
+            )}
+
+            {bulkRows.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-sm text-denim">{bulkRows.length} row{bulkRows.length !== 1 ? 's' : ''} parsed — preview:</p>
+                <div className="overflow-x-auto rounded-xl border border-powder max-h-40">
+                  <table className="w-full text-xs">
+                    <thead className="bg-powder/50 sticky top-0">
+                      <tr>
+                        {Object.keys(bulkRows[0]).map(k => (
+                          <th key={k} className="text-left px-3 py-2 text-denim font-medium">{k}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bulkRows.slice(0, 5).map((row, i) => (
+                        <tr key={i} className="border-t border-powder">
+                          {Object.values(row).map((v, j) => (
+                            <td key={j} className="px-3 py-2 text-classic-navy">{String(v)}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {bulkRows.length > 5 && <p className="text-xs text-denim">…and {bulkRows.length - 5} more rows</p>}
+                <div className="flex gap-3">
+                  <Button onClick={importStudents} disabled={bulkImporting}>
+                    {bulkImporting ? 'Generating codes…' : `Generate codes for ${bulkRows.length} student${bulkRows.length !== 1 ? 's' : ''}`}
+                  </Button>
+                  <Button variant="secondary" onClick={() => setBulkRows([])}>Cancel</Button>
+                </div>
+              </div>
+            )}
+
+            {bulkResult && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <p className="text-sm font-medium text-atlantic-navy">
+                    {bulkResult.filter(r => r.note === 'Created').length} codes created
+                    {bulkResult.filter(r => r.note !== 'Created').length > 0 &&
+                      ` · ${bulkResult.filter(r => r.note !== 'Created').length} skipped`}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button variant="secondary" onClick={downloadResultsCsv}>Download CSV</Button>
+                    <Button variant="secondary" onClick={() => { setBulkResult(null); setBulkRows([]) }}>
+                      Import another
+                    </Button>
+                  </div>
+                </div>
+                <div className="overflow-x-auto rounded-xl border border-powder max-h-64">
+                  <table className="w-full text-sm">
+                    <thead className="bg-powder/50 sticky top-0">
+                      <tr>
+                        <th className="text-left px-3 py-2 eyebrow">Name</th>
+                        <th className="text-left px-3 py-2 eyebrow">Email</th>
+                        <th className="text-left px-3 py-2 eyebrow">Code</th>
+                        <th className="text-left px-3 py-2 eyebrow">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bulkResult.map((r, i) => (
+                        <tr key={i} className={`border-t border-powder ${r.note !== 'Created' ? 'opacity-50' : ''}`}>
+                          <td className="px-3 py-2.5 font-medium text-classic-navy">{r.full_name || '—'}</td>
+                          <td className="px-3 py-2.5 text-denim">{r.email}</td>
+                          <td className="px-3 py-2.5 font-mono text-classic-navy tracking-widest">
+                            {r.code || '—'}
+                          </td>
+                          <td className="px-3 py-2.5 text-xs">
+                            {r.note === 'Created'
+                              ? <span className="text-green-600 font-medium">Created</span>
+                              : <span className="text-amber-600">{r.note}</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </Card>
 
           <Card>
