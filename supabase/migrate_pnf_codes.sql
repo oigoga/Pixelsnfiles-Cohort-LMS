@@ -29,15 +29,23 @@ BEGIN
     old_pid := md5(upper(trim(r.code)))::uuid;
     new_pid := md5(upper(trim(new_code)))::uuid;
 
-    -- Update FK references before changing the PK
-    UPDATE students  SET profile_id = new_pid WHERE profile_id = old_pid;
+    -- 1. Insert new profile with new_pid (copy from old row)
+    --    Must exist before students FK can point to it
+    INSERT INTO profiles (id, full_name, email, role, cohort_id)
+    SELECT new_pid, full_name, email, role, cohort_id
+    FROM   profiles
+    WHERE  id = old_pid
+    ON CONFLICT (id) DO NOTHING;
 
-    -- Update the profile primary key
-    UPDATE profiles  SET id = new_pid          WHERE id        = old_pid;
+    -- 2. Update students FK now that new_pid exists in profiles
+    UPDATE students SET profile_id = new_pid WHERE profile_id = old_pid;
 
-    -- Update the access code itself
-    UPDATE access_codes SET code = new_code    WHERE id = r.ac_id;
+    -- 3. Safe to delete the old profile (no references remain)
+    DELETE FROM profiles WHERE id = old_pid;
 
-    RAISE NOTICE 'Migrated: % → %  (profile % → %)', r.code, new_code, old_pid, new_pid;
+    -- 4. Update the access code
+    UPDATE access_codes SET code = new_code WHERE id = r.ac_id;
+
+    RAISE NOTICE 'Migrated: % → %', r.code, new_code;
   END LOOP;
 END $$;
