@@ -31,6 +31,9 @@ export default function TaskView() {
   const [driveLink, setDriveLink] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [editingLink, setEditingLink] = useState(false)
+  const [editLinkValue, setEditLinkValue] = useState('')
+  const [savingLink, setSavingLink] = useState(false)
 
   useEffect(() => { if (profile) load() }, [taskId, profile])
 
@@ -81,6 +84,24 @@ export default function TaskView() {
     }
 
     setLoading(false)
+  }
+
+  async function saveEditedLink(e) {
+    e.preventDefault()
+    if (!editLinkValue.startsWith('https://')) {
+      setError('Please enter a valid link starting with https://')
+      return
+    }
+    setSavingLink(true)
+    const { error: err } = await supabase
+      .from('submissions')
+      .update({ drive_link: editLinkValue })
+      .eq('id', submission.id)
+    setSavingLink(false)
+    if (err) { setError(err.message); return }
+    setSubmission(s => ({ ...s, drive_link: editLinkValue }))
+    setDriveLink(editLinkValue)
+    setEditingLink(false)
   }
 
   async function submitWork(e) {
@@ -183,8 +204,39 @@ export default function TaskView() {
 
         {submission && !canSubmit && (
           <div className="mb-4 p-4 bg-powder/50 rounded-xl">
-            <p className="text-sm font-semibold text-denim mb-1">Submitted link</p>
-            <a href={submission.drive_link} target="_blank" rel="noreferrer" className="text-atlantic-navy hover:underline break-all text-base">{submission.drive_link}</a>
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-sm font-semibold text-denim">Submitted link</p>
+              {submission.status === 'submitted' && !editingLink && (
+                <button
+                  onClick={() => { setEditLinkValue(submission.drive_link); setEditingLink(true); setError('') }}
+                  className="text-xs text-atlantic-navy hover:underline"
+                >
+                  Edit link
+                </button>
+              )}
+            </div>
+            {editingLink ? (
+              <form onSubmit={saveEditedLink} className="space-y-2 mt-2">
+                <input
+                  autoFocus
+                  type="url"
+                  required
+                  value={editLinkValue}
+                  onChange={e => setEditLinkValue(e.target.value)}
+                  className="input-field text-sm"
+                  placeholder="https://drive.google.com/…"
+                />
+                {error && <p className="text-red-600 text-sm">{error}</p>}
+                <div className="flex gap-2">
+                  <Button type="submit" disabled={savingLink}>{savingLink ? 'Saving…' : 'Save link'}</Button>
+                  <button type="button" onClick={() => { setEditingLink(false); setError('') }}
+                    className="text-sm text-denim hover:text-classic-navy px-3">Cancel</button>
+                </div>
+              </form>
+            ) : (
+              <a href={submission.drive_link} target="_blank" rel="noreferrer"
+                className="text-atlantic-navy hover:underline break-all text-base">{submission.drive_link}</a>
+            )}
           </div>
         )}
 
