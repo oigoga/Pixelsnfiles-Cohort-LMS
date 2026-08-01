@@ -11,13 +11,18 @@ node_modules
 dist
 dist-ssr
 *.local
+
+# Environment variables (never commit real credentials)
 .env
+.env.local
+.env.*.local
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
