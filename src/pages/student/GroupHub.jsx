@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { useGroupChat } from '../../hooks/useGroupChat'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
@@ -16,12 +17,8 @@ export default function GroupHub() {
   const [members, setMembers]         = useState([])
   const [teamTasks, setTeamTasks]     = useState([])
   const [teamSubs, setTeamSubs]       = useState({})
-  const [messages, setMessages]       = useState([])
-  const [chatError, setChatError]     = useState('')
-  const [newMsg, setNewMsg]           = useState('')
-  const [sending, setSending]         = useState(false)
   const messagesEndRef = useRef(null)
-  const pollRef        = useRef(null)
+  const { messages, chatError, newMsg, setNewMsg, sending, sendMessage } = useGroupChat(student?.peer_group_id)
 
   useEffect(() => { if (profile) load() }, [profile])
 
@@ -77,56 +74,7 @@ export default function GroupHub() {
       setTeamSubs(subMap)
     }
 
-    // Load messages + start polling
-    await loadMessages(stu.peer_group_id)
-    pollRef.current = setInterval(() => loadMessages(stu.peer_group_id), 5000)
-
     setLoading(false)
-  }
-
-  useEffect(() => () => clearInterval(pollRef.current), [])
-
-  async function loadMessages(groupId) {
-    const { data: msgs, error } = await supabase
-      .from('group_messages')
-      .select('id, author_id, body, created_at')
-      .eq('peer_group_id', groupId)
-      .order('created_at')
-    if (error) { setChatError(error.message); return }
-
-    if (!msgs?.length) { setMessages([]); setChatError(''); return }
-
-    // Fetch author profiles separately (avoids FK join cache issues)
-    const authorIds = [...new Set(msgs.map(m => m.author_id))]
-    const { data: profilesData } = await supabase
-      .from('profiles')
-      .select('id, full_name, role')
-      .in('id', authorIds)
-    const profileMap = {}
-    profilesData?.forEach(p => { profileMap[p.id] = p })
-
-    setChatError('')
-    setMessages(msgs.map(m => ({ ...m, profiles: profileMap[m.author_id] || null })))
-  }
-
-  async function sendMessage(e) {
-    e.preventDefault()
-    if (!newMsg.trim()) return
-    setSending(true)
-    setChatError('')
-    const { error } = await supabase.from('group_messages').insert({
-      peer_group_id: student.peer_group_id,
-      author_id:     profile.id,
-      body:          newMsg.trim(),
-    })
-    if (error) {
-      setChatError(error.message)
-      setSending(false)
-      return
-    }
-    setNewMsg('')
-    setSending(false)
-    await loadMessages(student.peer_group_id)
   }
 
   if (loading) return <div className="flex justify-center py-20"><Spinner className="w-8 h-8" /></div>
@@ -279,7 +227,7 @@ export default function GroupHub() {
                 <div ref={messagesEndRef} />
               </div>
 
-              <form onSubmit={sendMessage} className="flex gap-3">
+              <form onSubmit={e => sendMessage(e, profile.id)} className="flex gap-3">
                 <input
                   value={newMsg}
                   onChange={e => setNewMsg(e.target.value)}

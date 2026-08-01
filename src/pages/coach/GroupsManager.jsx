@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { useGroupChat } from '../../hooks/useGroupChat'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 
@@ -17,13 +18,8 @@ export default function GroupsManager() {
     project_title: '', project_brief: '', project_resource_url: '',
   })
 
-  // Chat
-  const [messages, setMessages]   = useState([])
-  const [newMsg, setNewMsg]       = useState('')
-  const [sending, setSending]     = useState(false)
-  const [chatError, setChatError] = useState('')
   const messagesEndRef = useRef(null)
-  const pollRef        = useRef(null)
+  const { messages, chatError, newMsg, setNewMsg, sending, sendMessage } = useGroupChat(selected?.id)
 
   useEffect(() => {
     supabase.from('cohorts').select('id, name').order('created_at', { ascending: false })
@@ -36,22 +32,12 @@ export default function GroupsManager() {
   useEffect(() => {
     if (!cohortId) return
     supabase.from('peer_groups').select('*').eq('cohort_id', cohortId).order('label')
-      .then(({ data }) => { setGroups(data || []); setSelected(null); clearChat() })
+      .then(({ data }) => { setGroups(data || []); setSelected(null) })
   }, [cohortId])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
-
-  // Stop polling when component unmounts
-  useEffect(() => () => clearInterval(pollRef.current), [])
-
-  function clearChat() {
-    clearInterval(pollRef.current)
-    setMessages([])
-    setNewMsg('')
-    setChatError('')
-  }
 
   async function selectGroup(g) {
     setSelected(g)
@@ -66,46 +52,6 @@ export default function GroupsManager() {
       .select('id, profiles(full_name, email)')
       .eq('peer_group_id', g.id)
     setMembers(data || [])
-
-    // Start chat for this group
-    clearInterval(pollRef.current)
-    await loadMessages(g.id)
-    pollRef.current = setInterval(() => loadMessages(g.id), 5000)
-  }
-
-  async function loadMessages(groupId) {
-    const { data: msgs, error } = await supabase
-      .from('group_messages')
-      .select('id, author_id, body, created_at')
-      .eq('peer_group_id', groupId)
-      .order('created_at')
-    if (error) { setChatError(error.message); return }
-    if (!msgs?.length) { setMessages([]); setChatError(''); return }
-
-    const authorIds = [...new Set(msgs.map(m => m.author_id))]
-    const { data: profilesData } = await supabase
-      .from('profiles').select('id, full_name, role').in('id', authorIds)
-    const profileMap = {}
-    profilesData?.forEach(p => { profileMap[p.id] = p })
-
-    setChatError('')
-    setMessages(msgs.map(m => ({ ...m, profiles: profileMap[m.author_id] || null })))
-  }
-
-  async function sendMessage(e) {
-    e.preventDefault()
-    if (!newMsg.trim() || !selected) return
-    setSending(true)
-    setChatError('')
-    const { error } = await supabase.from('group_messages').insert({
-      peer_group_id: selected.id,
-      author_id:     profile.id,
-      body:          newMsg.trim(),
-    })
-    if (error) { setChatError(error.message); setSending(false); return }
-    setNewMsg('')
-    setSending(false)
-    await loadMessages(selected.id)
   }
 
   async function saveProject(e) {
@@ -293,7 +239,7 @@ export default function GroupsManager() {
               )}
               <div ref={messagesEndRef} />
             </div>
-            <form onSubmit={sendMessage} className="flex gap-3">
+            <form onSubmit={e => sendMessage(e, profile.id)} className="flex gap-3">
               <input
                 value={newMsg}
                 onChange={e => setNewMsg(e.target.value)}
