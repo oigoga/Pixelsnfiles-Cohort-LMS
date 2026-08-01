@@ -31,8 +31,8 @@ BEGIN
 
     -- 1. Insert new profile with new_pid (copy from old row)
     --    Must exist before students FK can point to it
-    INSERT INTO profiles (id, full_name, email, role, cohort_id)
-    SELECT new_pid, full_name, email, role, cohort_id
+    INSERT INTO profiles (id, full_name, email, role)
+    SELECT new_pid, full_name, email, role
     FROM   profiles
     WHERE  id = old_pid
     ON CONFLICT (id) DO NOTHING;
