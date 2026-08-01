@@ -38,18 +38,20 @@ export default function TaskView() {
   useEffect(() => { if (profile) load() }, [taskId, profile])
 
   async function load() {
-    const { data: t } = await supabase
-      .from('tasks')
-      .select('*, modules(id, title, week_number, cohort_id)')
-      .eq('id', taskId)
-      .single()
+    // Task and student don't depend on each other — fetch in parallel.
+    const [{ data: t }, { data: stu }] = await Promise.all([
+      supabase
+        .from('tasks')
+        .select('*, modules(id, title, week_number, cohort_id)')
+        .eq('id', taskId)
+        .single(),
+      supabase
+        .from('students')
+        .select('id, peer_group_id')
+        .eq('profile_id', profile.id)
+        .single(),
+    ])
     setTask(t)
-
-    const { data: stu } = await supabase
-      .from('students')
-      .select('id, peer_group_id')
-      .eq('profile_id', profile.id)
-      .single()
     setStudent(stu)
 
     if (stu) {
@@ -66,19 +68,19 @@ export default function TaskView() {
       if (sub?.drive_link) setDriveLink(sub.drive_link)
 
       if (sub) {
-        // Peer reviews
-        const { data: reviews } = await supabase
-          .from('peer_reviews')
-          .select('*, students(profiles(full_name))')
-          .eq('submission_id', sub.id)
+        // Peer reviews and coach verification both only depend on sub.id.
+        const [{ data: reviews }, { data: cv }] = await Promise.all([
+          supabase
+            .from('peer_reviews')
+            .select('*, students(profiles(full_name))')
+            .eq('submission_id', sub.id),
+          supabase
+            .from('coach_verifications')
+            .select('*')
+            .eq('submission_id', sub.id)
+            .single(),
+        ])
         setPeerReviews(reviews || [])
-
-        // Coach verification
-        const { data: cv } = await supabase
-          .from('coach_verifications')
-          .select('*')
-          .eq('submission_id', sub.id)
-          .single()
         setCoachVerification(cv)
       }
     }

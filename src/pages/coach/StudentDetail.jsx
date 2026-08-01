@@ -18,18 +18,20 @@ export default function StudentDetail() {
   useEffect(() => { load() }, [studentId])
 
   async function load() {
-    const { data: stu } = await supabase
-      .from('students')
-      .select('*, profiles(*), peer_groups(label), cohorts(name, current_week)')
-      .eq('id', studentId)
-      .single()
+    // Both queries only depend on studentId, not on each other.
+    const [{ data: stu }, { data: subs }] = await Promise.all([
+      supabase
+        .from('students')
+        .select('*, profiles(*), peer_groups(label), cohorts(name, current_week)')
+        .eq('id', studentId)
+        .single(),
+      supabase
+        .from('submissions')
+        .select('*, tasks(title, type, requires_coach_verification, modules(title, week_number))')
+        .eq('student_id', studentId)
+        .order('submitted_at', { ascending: false }),
+    ])
     setStudent(stu)
-
-    const { data: subs } = await supabase
-      .from('submissions')
-      .select('*, tasks(title, type, requires_coach_verification, modules(title, week_number))')
-      .eq('student_id', studentId)
-      .order('submitted_at', { ascending: false })
     setSubmissions(subs || [])
 
     setLoading(false)

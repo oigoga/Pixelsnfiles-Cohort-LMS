@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import Papa from 'papaparse'
 import { supabase } from '../../lib/supabase'
 import { Card } from '../../components/ui/Card'
@@ -55,6 +55,34 @@ export default function CohortSetup() {
 
   // Track assignment
   const [trackEditing, setTrackEditing] = useState({}) // studentId → custom text being typed
+
+  // Students table search + pagination
+  const STUDENTS_PER_PAGE = 25
+  const [studentSearch, setStudentSearch] = useState('')
+  const [studentPage, setStudentPage] = useState(1)
+
+  const codeByEmail = useMemo(() => {
+    const map = {}
+    codes.forEach(c => { map[c.email] = c.code })
+    return map
+  }, [codes])
+
+  const filteredStudents = useMemo(() => {
+    const q = studentSearch.trim().toLowerCase()
+    if (!q) return students
+    return students.filter(s =>
+      s.profiles?.full_name?.toLowerCase().includes(q) ||
+      s.profiles?.email?.toLowerCase().includes(q)
+    )
+  }, [students, studentSearch])
+
+  const totalStudentPages = Math.max(1, Math.ceil(filteredStudents.length / STUDENTS_PER_PAGE))
+  const pagedStudents = useMemo(() => {
+    const start = (studentPage - 1) * STUDENTS_PER_PAGE
+    return filteredStudents.slice(start, start + STUDENTS_PER_PAGE)
+  }, [filteredStudents, studentPage])
+
+  useEffect(() => { setStudentPage(1) }, [studentSearch, activeCohort?.id])
 
   async function updateTrack(studentId, track) {
     await supabase.from('students').update({ track }).eq('id', studentId)
@@ -272,20 +300,23 @@ export default function CohortSetup() {
     const { data: allCodes } = await supabase.from('access_codes').select('code')
     const usedCodes = new Set((allCodes || []).map(c => c.code.toUpperCase()))
 
-    const results = []
+    const results = new Array(bulkRows.length)
+    const toInsert = []
 
-    for (const row of bulkRows) {
+    // Work out codes for every row first (pure, in-memory) so the actual
+    // inserts can fire concurrently instead of one row at a time.
+    bulkRows.forEach((row, i) => {
       const full_name = (row['Full name'] || row['Name'] || row['full_name'] || row['name'] || '').trim()
       const email     = (row['Email'] || row['email'] || '').trim().toLowerCase()
 
       if (!full_name || !email) {
-        results.push({ full_name, email, code: null, note: 'Missing name or email' })
-        continue
+        results[i] = { full_name, email, code: null, note: 'Missing name or email' }
+        return
       }
 
       if (existingByEmail[email] !== undefined) {
-        results.push({ full_name, email, code: existingByEmail[email], note: 'Already has a code' })
-        continue
+        results[i] = { full_name, email, code: existingByEmail[email], note: 'Already has a code' }
+        return
       }
 
       // Generate a name-based collision-free code
@@ -295,6 +326,10 @@ export default function CohortSetup() {
       usedCodes.add(code)
       existingByEmail[email] = code
 
+      toInsert.push({ index: i, full_name, email, code })
+    })
+
+    await Promise.all(toInsert.map(async ({ index, full_name, email, code }) => {
       const { error } = await supabase.from('access_codes').insert({
         code,
         full_name,
@@ -302,12 +337,10 @@ export default function CohortSetup() {
         role: 'student',
         cohort_id: activeCohort.id,
       })
-
-      results.push(error
+      results[index] = error
         ? { full_name, email, code: null, note: error.message }
         : { full_name, email, code, note: 'Created' }
-      )
-    }
+    }))
 
     setBulkImporting(false)
     setBulkResult(results)
@@ -346,7 +379,7 @@ export default function CohortSetup() {
     setImporting(true)
     setImportResult(null)
 
-    let created = 0, updated = 0, errors = []
+    const errors = []
 
     // Load existing modules for this cohort
     const { data: existingModules } = await supabase
@@ -357,25 +390,36 @@ export default function CohortSetup() {
     const moduleMap = {}
     existingModules?.forEach(m => { moduleMap[m.week_number] = m.id })
 
-    for (const row of importRows) {
-      const week = parseInt(row['Week'])
-      if (isNaN(week)) { errors.push(`Bad week: ${JSON.stringify(row)}`); continue }
+    const rowsWithWeek = importRows.map(row => ({ row, week: parseInt(row['Week']) }))
+    rowsWithWeek.forEach(({ row, week }) => {
+      if (isNaN(week)) errors.push(`Bad week: ${JSON.stringify(row)}`)
+    })
+    const validRows = rowsWithWeek.filter(({ week }) => !isNaN(week))
 
-      // Ensure module exists
-      if (!moduleMap[week]) {
-        const { data: mod } = await supabase
-          .from('modules')
-          .insert({
-            cohort_id: activeCohort.id,
-            week_number: week,
-            title: `Module ${week}`,
-            sort_order: week,
-          })
-          .select('id')
-          .single()
-        moduleMap[week] = mod.id
-      }
+    // Create every missing module concurrently instead of one at a time.
+    const missingWeeks = [...new Set(validRows.filter(({ week }) => !moduleMap[week]).map(({ week }) => week))]
+    if (missingWeeks.length) {
+      const created = await Promise.all(missingWeeks.map(week =>
+        supabase.from('modules').insert({
+          cohort_id: activeCohort.id,
+          week_number: week,
+          title: `Module ${week}`,
+          sort_order: week,
+        }).select('id').single()
+      ))
+      missingWeeks.forEach((week, i) => { moduleMap[week] = created[i].data.id })
+    }
 
+    // One query for every existing task in the affected modules, instead of
+    // a per-row lookup.
+    const moduleIds = [...new Set(validRows.map(({ week }) => moduleMap[week]))]
+    const { data: existingTasks } = moduleIds.length
+      ? await supabase.from('tasks').select('id, module_id, title').in('module_id', moduleIds)
+      : { data: [] }
+    const existingTaskMap = {}
+    existingTasks?.forEach(t => { existingTaskMap[`${t.module_id}::${t.title}`] = t.id })
+
+    const payloads = validRows.map(({ row, week }, i) => {
       const dod = (row['Definition of done'] || '')
         .split('\n')
         .map(s => s.trim())
@@ -387,7 +431,7 @@ export default function CohortSetup() {
             .toISOString().split('T')[0]
         : null
 
-      const payload = {
+      return {
         module_id: moduleMap[week],
         title: row['Task title'] || '',
         type: row['Type']?.toLowerCase() === 'team' ? 'team' : 'individual',
@@ -395,28 +439,27 @@ export default function CohortSetup() {
         definition_of_done: dod,
         requires_coach_verification: row['Milestone']?.toLowerCase() === 'yes',
         due_date: dueDate,
-        sort_order: created + updated + 1,
+        sort_order: i + 1,
       }
+    })
 
-      // Upsert by title + module_id
-      const { data: existing } = await supabase
-        .from('tasks')
-        .select('id')
-        .eq('module_id', moduleMap[week])
-        .eq('title', payload.title)
-        .single()
+    // Upsert by title + module_id: new tasks batch-inserted in one call,
+    // updates to existing tasks fired concurrently.
+    const toInsert = []
+    const toUpdate = []
+    payloads.forEach(payload => {
+      const existingId = existingTaskMap[`${payload.module_id}::${payload.title}`]
+      if (existingId) toUpdate.push({ id: existingId, payload })
+      else toInsert.push(payload)
+    })
 
-      if (existing) {
-        await supabase.from('tasks').update(payload).eq('id', existing.id)
-        updated++
-      } else {
-        await supabase.from('tasks').insert(payload)
-        created++
-      }
-    }
+    await Promise.all([
+      toInsert.length ? supabase.from('tasks').insert(toInsert) : Promise.resolve(),
+      ...toUpdate.map(({ id, payload }) => supabase.from('tasks').update(payload).eq('id', id)),
+    ])
 
     setImporting(false)
-    setImportResult({ created, updated, errors })
+    setImportResult({ created: toInsert.length, updated: toUpdate.length, errors })
   }
 
   if (loading) return <div className="text-denim text-sm">Loading…</div>
@@ -558,12 +601,24 @@ export default function CohortSetup() {
           </Card>
 
           <Card>
-            <h2 className="font-display text-xl text-atlantic-navy mb-1">
-              Students <span className="text-denim text-base font-sans">({students.length})</span>
-            </h2>
+            <div className="flex items-center justify-between gap-4 mb-1 flex-wrap">
+              <h2 className="font-display text-xl text-atlantic-navy">
+                Students <span className="text-denim text-base font-sans">({students.length})</span>
+              </h2>
+              {students.length > 0 && (
+                <input
+                  value={studentSearch}
+                  onChange={e => setStudentSearch(e.target.value)}
+                  placeholder="Search name or email…"
+                  className="input-field text-sm py-1.5 w-56"
+                />
+              )}
+            </div>
             <p className="text-xs text-denim mb-4">The <strong>Code</strong> column is what each student uses to log in. If a student loses their code, you can find it here.</p>
             {students.length === 0 ? (
               <p className="text-denim text-sm">No students enrolled yet. They'll appear here once they create an account on the login page.</p>
+            ) : filteredStudents.length === 0 ? (
+              <p className="text-denim text-sm">No students match "{studentSearch}".</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -578,8 +633,8 @@ export default function CohortSetup() {
                     </tr>
                   </thead>
                   <tbody>
-                    {students.map(s => {
-                      const studentCode = codes.find(c => c.email === s.profiles?.email)?.code
+                    {pagedStudents.map(s => {
+                      const studentCode = codeByEmail[s.profiles?.email]
                       return (
                         <tr key={s.id} className="border-b border-powder/50 hover:bg-powder/30 transition-colors">
                           <td className="py-2.5 pr-4"><StudentName name={s.profiles?.full_name || '—'} track={s.track} /></td>
@@ -664,6 +719,29 @@ export default function CohortSetup() {
                     })}
                   </tbody>
                 </table>
+                {totalStudentPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 text-sm text-denim">
+                    <span>
+                      Page {studentPage} of {totalStudentPages} · {filteredStudents.length} student{filteredStudents.length === 1 ? '' : 's'}
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setStudentPage(p => Math.max(1, p - 1))}
+                        disabled={studentPage === 1}
+                        className="px-3 py-1.5 rounded-lg border border-powder hover:border-denim disabled:opacity-40 disabled:hover:border-powder transition-colors"
+                      >
+                        ← Prev
+                      </button>
+                      <button
+                        onClick={() => setStudentPage(p => Math.min(totalStudentPages, p + 1))}
+                        disabled={studentPage === totalStudentPages}
+                        className="px-3 py-1.5 rounded-lg border border-powder hover:border-denim disabled:opacity-40 disabled:hover:border-powder transition-colors"
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </Card>

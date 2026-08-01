@@ -32,44 +32,38 @@ export default function StudentDashboard() {
     setStudent(stu)
     setCohort(stu.cohorts)
 
-    // Modules
-    const { data: mods } = await supabase
-      .from('modules')
-      .select('id, title, week_number, sort_order')
-      .eq('cohort_id', stu.cohort_id)
-      .order('sort_order')
+    // Modules, submissions, announcements & groupmates only depend on `stu`,
+    // not on each other — fetch them together instead of one at a time.
+    const [{ data: mods }, { data: subs }, { data: anns }, { data: gm }] = await Promise.all([
+      supabase
+        .from('modules')
+        .select('id, title, week_number, sort_order')
+        .eq('cohort_id', stu.cohort_id)
+        .order('sort_order'),
+      supabase
+        .from('submissions')
+        .select('task_id, status')
+        .eq('student_id', stu.id),
+      supabase
+        .from('announcements')
+        .select('*')
+        .eq('cohort_id', stu.cohort_id)
+        .order('pinned', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(5),
+      stu.peer_group_id
+        ? supabase
+            .from('students')
+            .select('id, profiles(full_name, email)')
+            .eq('peer_group_id', stu.peer_group_id)
+            .neq('id', stu.id)
+        : Promise.resolve({ data: [] }),
+    ])
 
     setModules(mods || [])
-
-    // My submissions
-    const { data: subs } = await supabase
-      .from('submissions')
-      .select('task_id, status')
-      .eq('student_id', stu.id)
-
     setSubmissions(subs || [])
-
-    // Announcements
-    const { data: anns } = await supabase
-      .from('announcements')
-      .select('*')
-      .eq('cohort_id', stu.cohort_id)
-      .order('pinned', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(5)
-
     setAnnouncements(anns || [])
-
-    // Groupmates
-    if (stu.peer_group_id) {
-      const { data: gm } = await supabase
-        .from('students')
-        .select('id, profiles(full_name, email)')
-        .eq('peer_group_id', stu.peer_group_id)
-        .neq('id', stu.id)
-
-      setGroupmates(gm || [])
-    }
+    setGroupmates(gm || [])
 
     setLoading(false)
   }

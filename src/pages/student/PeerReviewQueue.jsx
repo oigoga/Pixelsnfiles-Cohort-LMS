@@ -40,18 +40,19 @@ export default function PeerReviewQueue() {
     const gmIds = groupmates?.map(g => g.id) || []
     if (!gmIds.length) { setLoading(false); return }
 
-    const { data: subs } = await supabase
-      .from('submissions')
-      .select('*, tasks(title, definition_of_done, module_id, modules(title)), students(profiles(full_name))')
-      .in('student_id', gmIds)
-      .eq('status', 'submitted')
-      .is('peer_group_id', null) // individual tasks only
-
-    // Filter out ones I've already reviewed
-    const { data: myReviews } = await supabase
-      .from('peer_reviews')
-      .select('submission_id')
-      .eq('reviewer_student_id', stu.id)
+    // Submissions to review and my own past reviews are independent queries.
+    const [{ data: subs }, { data: myReviews }] = await Promise.all([
+      supabase
+        .from('submissions')
+        .select('*, tasks(title, definition_of_done, module_id, modules(title)), students(profiles(full_name))')
+        .in('student_id', gmIds)
+        .eq('status', 'submitted')
+        .is('peer_group_id', null), // individual tasks only
+      supabase
+        .from('peer_reviews')
+        .select('submission_id')
+        .eq('reviewer_student_id', stu.id),
+    ])
 
     const reviewed = new Set(myReviews?.map(r => r.submission_id))
     setQueue((subs || []).filter(s => !reviewed.has(s.id)))
