@@ -28,6 +28,7 @@ export default function OverviewBoard() {
   const [students, setStudents] = useState([])
   const [modules, setModules] = useState([])
   const [grid, setGrid] = useState({}) // studentId → moduleId → best_status
+  const [codesByEmail, setCodesByEmail] = useState({}) // email → [codes] (>1 means duplicate signup)
 
   useEffect(() => {
     supabase.from('cohorts').select('id, name').order('created_at', { ascending: false })
@@ -42,7 +43,7 @@ export default function OverviewBoard() {
   async function loadBoard(cId) {
     setLoading(true)
 
-    const [stuRes, modRes] = await Promise.all([
+    const [stuRes, modRes, codeRes] = await Promise.all([
       supabase.from('students')
         .select('id, track, profiles(full_name, email), peer_groups(label)')
         .eq('cohort_id', cId)
@@ -52,12 +53,22 @@ export default function OverviewBoard() {
         .select('id, title, week_number')
         .eq('cohort_id', cId)
         .order('sort_order'),
+      // Every access code, across every cohort — lets us flag the same
+      // email holding more than one code (a duplicate signup).
+      supabase.from('access_codes').select('email, code'),
     ])
 
     const stuList = stuRes.data || []
     const modList = modRes.data || []
     setStudents(stuList)
     setModules(modList)
+
+    const codeMap = {}
+    ;(codeRes.data || []).forEach(c => {
+      const key = c.email.toLowerCase()
+      ;(codeMap[key] ||= []).push(c.code)
+    })
+    setCodesByEmail(codeMap)
 
     // Get all tasks for these modules
     const modIds = modList.map(m => m.id)
@@ -146,13 +157,25 @@ export default function OverviewBoard() {
               </tr>
             </thead>
             <tbody>
-              {students.map(s => (
+              {students.map(s => {
+                const studentCodes = codesByEmail[s.profiles?.email?.toLowerCase()] || []
+                return (
                 <tr key={s.id} className="border-t border-powder hover:bg-powder/20 transition-colors">
                   <td className="px-4 py-2.5 sticky left-0 bg-soft-butter">
                     <Link to={`/coach/student/${s.id}`} className="hover:underline">
                       <StudentName name={s.profiles?.full_name || s.profiles?.email} track={s.track} />
                       {s.peer_groups?.label && (
                         <p className="text-denim mt-0.5">{s.peer_groups.label}</p>
+                      )}
+                      {studentCodes.length > 0 && (
+                        <p className="mt-1 flex items-center flex-wrap gap-1">
+                          <span className="font-mono text-xs bg-powder px-1.5 py-0.5 rounded-md text-classic-navy tracking-widest">
+                            {studentCodes.join(', ')}
+                          </span>
+                          {studentCodes.length > 1 && (
+                            <span className="font-sans text-xs font-semibold text-red-600">⚠ duplicate</span>
+                          )}
+                        </p>
                       )}
                     </Link>
                   </td>
@@ -167,7 +190,8 @@ export default function OverviewBoard() {
                     )
                   })}
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </div>

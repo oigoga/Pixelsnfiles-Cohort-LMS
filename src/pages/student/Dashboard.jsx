@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
+import { useStudentNotes } from '../../hooks/useStudentNotes'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
+import { Button } from '../../components/ui/Button'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { Spinner } from '../../components/ui/Spinner'
 
@@ -16,8 +18,14 @@ export default function StudentDashboard() {
   const [submissions, setSubmissions] = useState([])
   const [announcements, setAnnouncements] = useState([])
   const [groupmates, setGroupmates] = useState([])
+  const notesEndRef = useRef(null)
+  const { messages: notes, chatError: notesError, newMsg: noteText, setNewMsg: setNoteText, sending: sendingNote, sendMessage: sendNote } = useStudentNotes(student?.id)
 
   useEffect(() => { if (profile) load() }, [profile])
+
+  useEffect(() => {
+    notesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [notes])
 
   async function load() {
     // Student record
@@ -95,6 +103,11 @@ export default function StudentDashboard() {
           {student.peer_groups && <Badge variant="honeycomb">{student.peer_groups.label}</Badge>}
           <Badge variant="default">Week {currentWeek}</Badge>
         </div>
+        {profile?.code && (
+          <p className="text-xs text-denim mt-2">
+            Your access code: <span className="font-mono tracking-widest">{profile.code}</span>
+          </p>
+        )}
       </div>
 
       {/* Pinned announcements */}
@@ -188,6 +201,53 @@ export default function StudentDashboard() {
             )
           })}
         </div>
+      </div>
+
+      {/* Private notes — just this student and their coach */}
+      <div>
+        <h2 className="font-display text-2xl text-atlantic-navy mb-3">Private notes</h2>
+        {notesError && (
+          <div className="mb-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{notesError}</div>
+        )}
+        <Card>
+          <div className="h-64 overflow-y-auto space-y-3 mb-4 pr-1">
+            {notes.length === 0 && (
+              <p className="text-sm text-denim text-center py-8">No notes yet from your coach.</p>
+            )}
+            {notes.map(msg => {
+              const isMe = msg.author_id === profile.id
+              return (
+                <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                  <p className={`text-xs text-denim mb-1 ${isMe ? 'text-right' : ''}`}>
+                    {isMe ? 'You' : (msg.profiles?.full_name || 'Coach')}
+                    {' · '}
+                    {new Date(msg.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm leading-relaxed ${
+                    isMe
+                      ? 'bg-atlantic-navy text-soft-butter rounded-tr-sm'
+                      : 'bg-powder/60 text-classic-navy rounded-tl-sm'
+                  }`}>
+                    {msg.body}
+                  </div>
+                </div>
+              )
+            })}
+            <div ref={notesEndRef} />
+          </div>
+          <form onSubmit={e => sendNote(e, profile.id)} className="flex gap-3">
+            <input
+              value={noteText}
+              onChange={e => setNoteText(e.target.value)}
+              placeholder="Write a note to your coach…"
+              className="input-field flex-1 text-sm"
+              maxLength={2000}
+            />
+            <Button type="submit" disabled={sendingNote || !noteText.trim()}>
+              {sendingNote ? '…' : 'Send'}
+            </Button>
+          </form>
+        </Card>
       </div>
     </div>
   )

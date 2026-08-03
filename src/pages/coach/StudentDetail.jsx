@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useAuth } from '../../context/AuthContext'
+import { useStudentNotes } from '../../hooks/useStudentNotes'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
@@ -9,13 +11,19 @@ import { Spinner } from '../../components/ui/Spinner'
 
 export default function StudentDetail() {
   const { studentId } = useParams()
+  const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [student, setStudent] = useState(null)
   const [submissions, setSubmissions] = useState([])
-  const [notes, setNotes] = useState('')
-  const [savingNotes, setSavingNotes] = useState(false)
+  const [studentCodes, setStudentCodes] = useState([])
+  const notesEndRef = useRef(null)
+  const { messages: notes, chatError: notesError, newMsg: noteText, setNewMsg: setNoteText, sending: sendingNote, sendMessage: sendNote } = useStudentNotes(studentId)
 
   useEffect(() => { load() }, [studentId])
+
+  useEffect(() => {
+    notesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [notes])
 
   async function load() {
     // Both queries only depend on studentId, not on each other.
@@ -33,6 +41,16 @@ export default function StudentDetail() {
     ])
     setStudent(stu)
     setSubmissions(subs || [])
+
+    // All access codes tied to this email — more than one means a duplicate signup.
+    if (stu?.profiles?.email) {
+      const { data: codes } = await supabase
+        .from('access_codes')
+        .select('code, created_at')
+        .ilike('email', stu.profiles.email)
+        .order('created_at')
+      setStudentCodes(codes || [])
+    }
 
     setLoading(false)
   }
@@ -56,6 +74,15 @@ export default function StudentDetail() {
           <Badge variant={student.status === 'active' ? 'success' : 'default'}>{student.status}</Badge>
         </div>
         <p className="text-sm text-denim mt-1">{student.profiles?.email}</p>
+        {studentCodes.length > 0 && (
+          <p className="text-xs mt-2 flex items-center flex-wrap gap-2">
+            <span className="text-denim">Access code{studentCodes.length > 1 ? 's' : ''}:</span>
+            <span className="font-mono tracking-widest">{studentCodes.map(c => c.code).join(', ')}</span>
+            {studentCodes.length > 1 && (
+              <Badge variant="danger">⚠ {studentCodes.length} accounts — likely a duplicate signup</Badge>
+            )}
+          </p>
+        )}
       </div>
 
       {/* Stats */}
@@ -111,30 +138,50 @@ export default function StudentDetail() {
         )}
       </Card>
 
-      {/* Coach notes */}
+      {/* Private notes — just this coach and this student */}
       <Card>
-        <h2 className="font-display text-xl text-atlantic-navy mb-3">Private coach notes</h2>
-        <p className="text-xs text-denim mb-3">Only visible to you.</p>
-        <textarea
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
-          rows={5}
-          placeholder="Notes about this student's progress, context, concerns…"
-          className="input-field resize-y w-full"
-        />
-        <Button
-          className="mt-3"
-          variant="secondary"
-          disabled={savingNotes}
-          onClick={async () => {
-            setSavingNotes(true)
-            // Store in localStorage keyed by studentId (Phase 2: move to DB)
-            localStorage.setItem(`coach_notes_${studentId}`, notes)
-            setTimeout(() => setSavingNotes(false), 500)
-          }}
-        >
-          {savingNotes ? 'Saved' : 'Save notes'}
-        </Button>
+        <h2 className="font-display text-xl text-atlantic-navy mb-1">Private notes</h2>
+        <p className="text-xs text-denim mb-3">Just between you and {student.profiles?.full_name || 'this student'} — no one else sees this.</p>
+        {notesError && (
+          <div className="mb-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">{notesError}</div>
+        )}
+        <div className="h-64 overflow-y-auto space-y-3 mb-4 pr-1">
+          {notes.length === 0 && (
+            <p className="text-sm text-denim text-center py-8">No notes yet. Say something to get started.</p>
+          )}
+          {notes.map(msg => {
+            const isMe = msg.author_id === profile.id
+            return (
+              <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                <p className={`text-xs text-denim mb-1 ${isMe ? 'text-right' : ''}`}>
+                  {isMe ? 'You' : (msg.profiles?.full_name || 'Student')}
+                  {' · '}
+                  {new Date(msg.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </p>
+                <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm leading-relaxed ${
+                  isMe
+                    ? 'bg-atlantic-navy text-soft-butter rounded-tr-sm'
+                    : 'bg-powder/60 text-classic-navy rounded-tl-sm'
+                }`}>
+                  {msg.body}
+                </div>
+              </div>
+            )
+          })}
+          <div ref={notesEndRef} />
+        </div>
+        <form onSubmit={e => sendNote(e, profile.id)} className="flex gap-3">
+          <input
+            value={noteText}
+            onChange={e => setNoteText(e.target.value)}
+            placeholder="Write a note…"
+            className="input-field flex-1 text-sm"
+            maxLength={2000}
+          />
+          <Button type="submit" disabled={sendingNote || !noteText.trim()}>
+            {sendingNote ? '…' : 'Send'}
+          </Button>
+        </form>
       </Card>
     </div>
   )
