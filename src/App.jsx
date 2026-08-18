@@ -20,6 +20,7 @@ const QandA              = lazy(() => import('./pages/QandA'))
 
 // Coach pages
 const OverviewBoard         = lazy(() => import('./pages/coach/OverviewBoard'))
+const StudentsBoard         = lazy(() => import('./pages/coach/StudentsBoard'))
 const RiskBoard              = lazy(() => import('./pages/coach/RiskBoard'))
 const StudentDetail         = lazy(() => import('./pages/coach/StudentDetail'))
 const VerificationQueue     = lazy(() => import('./pages/coach/VerificationQueue'))
@@ -75,6 +76,7 @@ export default function App() {
             >
               <Route index element={<Navigate to="overview" replace />} />
               <Route path="overview" element={<OverviewBoard />} />
+              <Route path="students" element={<StudentsBoard />} />
               <Route path="risk" element={<RiskBoard />} />
               <Route path="student/:studentId" element={<StudentDetail />} />
               <Route path="verify" element={<VerificationQueue />} />

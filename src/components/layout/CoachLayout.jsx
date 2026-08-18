@@ -5,6 +5,7 @@ import { StudentSearch } from '../coach/StudentSearch'
 
 const navItems = [
   { to: '/coach/overview', label: 'Overview' },
+  { to: '/coach/students', label: 'Students' },
   { to: '/coach/leaderboard', label: 'Leaderboard' },
   { to: '/coach/verify', label: 'Verify Queue' },
   { to: '/coach/modules', label: 'Modules' },
