@@ -5,7 +5,7 @@ import { Card } from '../../components/ui/Card'
 import { Spinner } from '../../components/ui/Spinner'
 import { StudentName } from '../../components/ui/StudentName'
 
-const emptyWeekStat = { submitted: 0, approved: 0, rework: 0 }
+const emptyWeekStat = { submitted: 0, approved: 0, rework: 0, verified: 0 }
 
 export default function StudentsBoard() {
   const [loading, setLoading] = useState(true)
@@ -14,7 +14,9 @@ export default function StudentsBoard() {
   const [groups, setGroups] = useState([])
   const [students, setStudents] = useState([])
   const [modules, setModules] = useState([])
-  const [stats, setStats] = useState({}) // studentId -> weekNumber -> { submitted, approved, rework }
+  const [stats, setStats] = useState({}) // studentId -> weekNumber -> { submitted, approved, rework, verified }
+  const [milestoneTotal, setMilestoneTotal] = useState(0) // total milestone tasks in this cohort
+  const [milestoneReviewed, setMilestoneReviewed] = useState({}) // studentId -> count of milestone tasks a coach has reviewed
 
   useEffect(() => {
     supabase.from('cohorts').select('id, name').order('created_at', { ascending: false })
@@ -51,17 +53,31 @@ export default function StudentsBoard() {
 
     const modIds = moduleList.map(m => m.id)
     const stuIds = studentList.map(s => s.id)
-    if (!modIds.length || !stuIds.length) { setStats({}); setLoading(false); return }
+    if (!modIds.length || !stuIds.length) {
+      setStats({}); setMilestoneTotal(0); setMilestoneReviewed({}); setLoading(false)
+      return
+    }
 
     const [{ data: tasks }, { data: subs }] = await Promise.all([
-      supabase.from('tasks').select('id, module_id').in('module_id', modIds),
-      supabase.from('submissions').select('student_id, task_id, status').in('student_id', stuIds),
+      supabase.from('tasks').select('id, module_id, requires_coach_verification').in('module_id', modIds),
+      supabase.from('submissions').select('id, student_id, task_id, status').in('student_id', stuIds),
     ])
 
     const taskWeek = {}
-    tasks?.forEach(t => { taskWeek[t.id] = moduleWeek[t.module_id] })
+    const milestoneTaskIds = new Set()
+    tasks?.forEach(t => {
+      taskWeek[t.id] = moduleWeek[t.module_id]
+      if (t.requires_coach_verification) milestoneTaskIds.add(t.id)
+    })
+
+    const submissionIds = (subs || []).map(s => s.id)
+    const { data: verifications } = submissionIds.length
+      ? await supabase.from('coach_verifications').select('submission_id').in('submission_id', submissionIds)
+      : { data: [] }
+    const reviewedSubmissionIds = new Set((verifications || []).map(v => v.submission_id))
 
     const statsData = {}
+    const milestoneReviewedData = {}
     subs?.forEach(sub => {
       const week = taskWeek[sub.task_id]
       if (week === undefined) return
@@ -71,9 +87,18 @@ export default function StudentsBoard() {
       bucket.submitted++
       if (sub.status === 'peer_approved') bucket.approved++
       if (sub.status === 'needs_rework') bucket.rework++
+      if (sub.status === 'coach_verified') bucket.verified++
+
+      // A milestone task counts as "reviewed" once a coach has left any
+      // verify/rework decision on it — separate from the approval outcome.
+      if (milestoneTaskIds.has(sub.task_id) && reviewedSubmissionIds.has(sub.id)) {
+        milestoneReviewedData[sub.student_id] = (milestoneReviewedData[sub.student_id] || 0) + 1
+      }
     })
 
     setStats(statsData)
+    setMilestoneTotal(milestoneTaskIds.size)
+    setMilestoneReviewed(milestoneReviewedData)
     setLoading(false)
   }
 
@@ -92,7 +117,9 @@ export default function StudentsBoard() {
       submitted: acc.submitted + ws.submitted,
       approved:  acc.approved + ws.approved,
       rework:    acc.rework + ws.rework,
+      verified:  acc.verified + ws.verified,
     }), { ...emptyWeekStat })
+    const reviewed = milestoneReviewed[s.id] || 0
 
     return (
       <tr className="border-t border-powder/50">
@@ -105,20 +132,29 @@ export default function StudentsBoard() {
           const ws = studentStats[w] || emptyWeekStat
           return (
             <td key={w} className="px-2 py-2 text-center text-xs whitespace-nowrap">
-              <span className="text-classic-navy font-semibold">{ws.submitted}</span>
-              <span className="text-denim/50 mx-0.5">/</span>
-              <span className="text-green-600 font-semibold">{ws.approved}</span>
-              <span className="text-denim/50 mx-0.5">/</span>
-              <span className="text-red-600 font-semibold">{ws.rework}</span>
+              <div>
+                <span className="text-classic-navy font-semibold">{ws.submitted}</span>
+                <span className="text-denim/50 mx-0.5">/</span>
+                <span className="text-green-600 font-semibold">{ws.approved}</span>
+                <span className="text-denim/50 mx-0.5">/</span>
+                <span className="text-red-600 font-semibold">{ws.rework}</span>
+              </div>
+              <div className="text-amber-600 font-semibold mt-0.5">🏅 {ws.verified}</div>
             </td>
           )
         })}
         <td className="px-2 py-2 text-center text-xs whitespace-nowrap bg-powder/30 font-bold">
-          <span className="text-classic-navy">{total.submitted}</span>
-          <span className="text-denim/50 mx-0.5">/</span>
-          <span className="text-green-600">{total.approved}</span>
-          <span className="text-denim/50 mx-0.5">/</span>
-          <span className="text-red-600">{total.rework}</span>
+          <div>
+            <span className="text-classic-navy">{total.submitted}</span>
+            <span className="text-denim/50 mx-0.5">/</span>
+            <span className="text-green-600">{total.approved}</span>
+            <span className="text-denim/50 mx-0.5">/</span>
+            <span className="text-red-600">{total.rework}</span>
+          </div>
+          <div className="text-amber-600 mt-0.5">🏅 {total.verified}</div>
+        </td>
+        <td className="px-2 py-2 text-center text-xs whitespace-nowrap bg-honeycomb/20 font-bold text-amber-800">
+          {reviewed}/{milestoneTotal}
         </td>
       </tr>
     )
@@ -137,6 +173,7 @@ export default function StudentsBoard() {
                 <th key={w} className="px-2 py-2 text-center text-denim font-medium min-w-[80px]">Wk {w}</th>
               ))}
               <th className="px-2 py-2 text-center text-denim font-medium min-w-[80px] bg-powder/30">Total</th>
+              <th className="px-2 py-2 text-center text-amber-800 font-medium min-w-[90px] bg-honeycomb/20">Milestones</th>
             </tr>
           </thead>
           <tbody>
@@ -164,7 +201,7 @@ export default function StudentsBoard() {
       </div>
 
       <p className="text-xs text-denim">
-        Each cell per week reads <span className="text-classic-navy font-semibold">submitted</span> / <span className="text-green-600 font-semibold">peer approved</span> / <span className="text-red-600 font-semibold">needs rework</span>.
+        Each cell per week reads <span className="text-classic-navy font-semibold">submitted</span> / <span className="text-green-600 font-semibold">peer approved</span> / <span className="text-red-600 font-semibold">needs rework</span>, with <span className="text-amber-600 font-semibold">🏅 coach-verified</span> below it. <span className="text-amber-800 font-semibold">Milestones</span> shows how many of this cohort's {milestoneTotal} milestone task{milestoneTotal === 1 ? '' : 's'} a coach has reviewed for that student.
       </p>
 
       {groups.length === 0 && ungrouped.length === 0 ? (
