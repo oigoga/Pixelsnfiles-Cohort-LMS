@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { Logo } from '../ui/Logo'
+import { ContentSearch } from '../student/ContentSearch'
 
 const navItems = [
   { to: '/student/dashboard', label: 'Dashboard' },
@@ -39,6 +40,7 @@ export default function StudentLayout() {
         </nav>
 
         <div className="flex items-center gap-3">
+          <ContentSearch />
           <span className="text-sm text-denim hidden sm:block">{profile?.full_name || profile?.email}</span>
           <button
             onClick={signOut}
