@@ -88,6 +88,12 @@ export default function StudentsBoard() {
 
   function StudentRow({ s }) {
     const studentStats = stats[s.id] || {}
+    const total = Object.values(studentStats).reduce((acc, ws) => ({
+      submitted: acc.submitted + ws.submitted,
+      approved:  acc.approved + ws.approved,
+      rework:    acc.rework + ws.rework,
+    }), { ...emptyWeekStat })
+
     return (
       <tr className="border-t border-powder/50">
         <td className="px-4 py-2.5 sticky left-0 bg-white min-w-[160px]">
@@ -107,6 +113,13 @@ export default function StudentsBoard() {
             </td>
           )
         })}
+        <td className="px-2 py-2 text-center text-xs whitespace-nowrap bg-powder/30 font-bold">
+          <span className="text-classic-navy">{total.submitted}</span>
+          <span className="text-denim/50 mx-0.5">/</span>
+          <span className="text-green-600">{total.approved}</span>
+          <span className="text-denim/50 mx-0.5">/</span>
+          <span className="text-red-600">{total.rework}</span>
+        </td>
       </tr>
     )
   }
@@ -123,6 +136,7 @@ export default function StudentsBoard() {
               {weeks.map(w => (
                 <th key={w} className="px-2 py-2 text-center text-denim font-medium min-w-[80px]">Wk {w}</th>
               ))}
+              <th className="px-2 py-2 text-center text-denim font-medium min-w-[80px] bg-powder/30">Total</th>
             </tr>
           </thead>
           <tbody>
