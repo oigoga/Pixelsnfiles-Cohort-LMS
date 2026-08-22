@@ -24,6 +24,7 @@ const StudentsBoard         = lazy(() => import('./pages/coach/StudentsBoard'))
 const RiskBoard              = lazy(() => import('./pages/coach/RiskBoard'))
 const StudentDetail         = lazy(() => import('./pages/coach/StudentDetail'))
 const VerificationQueue     = lazy(() => import('./pages/coach/VerificationQueue'))
+const AllSubmissions        = lazy(() => import('./pages/coach/AllSubmissions'))
 const ModuleManager         = lazy(() => import('./pages/coach/ModuleManager'))
 const AnnouncementsManager = lazy(() => import('./pages/coach/AnnouncementsManager'))
 const CohortSetup           = lazy(() => import('./pages/coach/CohortSetup'))
@@ -80,6 +81,7 @@ export default function App() {
               <Route path="risk" element={<RiskBoard />} />
               <Route path="student/:studentId" element={<StudentDetail />} />
               <Route path="verify" element={<VerificationQueue />} />
+              <Route path="submissions" element={<AllSubmissions />} />
               <Route path="modules" element={<ModuleManager />} />
               <Route path="announcements" element={<AnnouncementsManager />} />
               <Route path="leaderboard" element={<Leaderboard />} />

@@ -1,19 +1,15 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-import { useAuth } from '../../context/AuthContext'
 import { Card } from '../../components/ui/Card'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Spinner } from '../../components/ui/Spinner'
+import { CoachDecisionForm } from '../../components/coach/CoachDecisionForm'
 
 export default function VerificationQueue() {
-  const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [queue, setQueue] = useState([])
   const [verifying, setVerifying] = useState(null)
-  const [decision, setDecision] = useState('verify')
-  const [comment, setComment] = useState('')
-  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -58,27 +54,6 @@ export default function VerificationQueue() {
 
   function startVerify(sub) {
     setVerifying(sub)
-    setDecision('verify')
-    setComment('')
-  }
-
-  async function submitVerification(e) {
-    e.preventDefault()
-    setSubmitting(true)
-
-    await supabase.from('coach_verifications').insert({
-      submission_id: verifying.id,
-      coach_id: profile.id,
-      decision,
-      comment: comment || null,
-    })
-
-    const newStatus = decision === 'verify' ? 'coach_verified' : 'needs_rework'
-    await supabase.from('submissions').update({ status: newStatus }).eq('id', verifying.id)
-
-    setVerifying(null)
-    setSubmitting(false)
-    await load()
   }
 
   if (loading) return <div className="flex justify-center py-20"><Spinner className="w-8 h-8" /></div>
@@ -121,76 +96,11 @@ export default function VerificationQueue() {
       ))}
 
       {verifying && (
-        <form onSubmit={submitVerification} className="space-y-6">
-          <Card>
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="eyebrow mb-1">Verifying</p>
-                <h2 className="font-display text-2xl text-atlantic-navy">{verifying.tasks?.title}</h2>
-                <p className="text-sm text-denim mt-1">
-                  {verifying.peer_groups?.label
-                    ? `Team submission — ${verifying.peer_groups.label}`
-                    : verifying.students?.profiles?.full_name}
-                </p>
-              </div>
-              <button type="button" onClick={() => setVerifying(null)} className="text-sm text-denim hover:text-atlantic-navy">
-                ← Back
-              </button>
-            </div>
-
-            <div className="mt-4">
-              <a
-                href={verifying.drive_link}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 text-sm text-atlantic-navy underline underline-offset-2"
-              >
-                📂 Open submitted work →
-              </a>
-            </div>
-          </Card>
-
-          <Card>
-            <h3 className="font-display text-xl text-atlantic-navy mb-4">Your decision</h3>
-            <div className="flex gap-3 mb-4">
-              <button
-                type="button"
-                onClick={() => setDecision('verify')}
-                className={`flex-1 py-3 rounded-xl border text-sm font-medium transition-colors ${
-                  decision === 'verify'
-                    ? 'bg-green-50 border-green-300 text-green-800'
-                    : 'border-powder text-denim hover:border-denim'
-                }`}
-              >
-                ✅ Verify
-              </button>
-              <button
-                type="button"
-                onClick={() => setDecision('rework')}
-                className={`flex-1 py-3 rounded-xl border text-sm font-medium transition-colors ${
-                  decision === 'rework'
-                    ? 'bg-red-50 border-red-300 text-red-700'
-                    : 'border-powder text-denim hover:border-denim'
-                }`}
-              >
-                ↩ Needs rework
-              </button>
-            </div>
-            <textarea
-              value={comment}
-              onChange={e => setComment(e.target.value)}
-              rows={4}
-              placeholder="Feedback for the student(s)…"
-              className="input-field resize-y w-full"
-            />
-            <div className="flex gap-3 mt-4">
-              <Button type="submit" disabled={submitting}>
-                {submitting ? 'Saving…' : 'Submit verification'}
-              </Button>
-              <Button type="button" variant="ghost" onClick={() => setVerifying(null)}>Cancel</Button>
-            </div>
-          </Card>
-        </form>
+        <CoachDecisionForm
+          submission={verifying}
+          onCancel={() => setVerifying(null)}
+          onDone={async () => { setVerifying(null); await load() }}
+        />
       )}
     </div>
   )
