@@ -16,6 +16,7 @@ export default function StudentDetail() {
   const [student, setStudent] = useState(null)
   const [submissions, setSubmissions] = useState([])
   const [studentCodes, setStudentCodes] = useState([])
+  const [pings, setPings] = useState([])
   const notesEndRef = useRef(null)
   const { messages: notes, chatError: notesError, newMsg: noteText, setNewMsg: setNoteText, sending: sendingNote, sendMessage: sendNote } = useStudentNotes(studentId)
 
@@ -52,7 +53,35 @@ export default function StudentDetail() {
       setStudentCodes(codes || [])
     }
 
+    if (stu?.profile_id) {
+      const { data: activity } = await supabase
+        .from('activity_pings')
+        .select('pinged_at')
+        .eq('profile_id', stu.profile_id)
+        .order('pinged_at')
+      setPings(activity || [])
+    }
+
     setLoading(false)
+  }
+
+  // Time spent = sum of gaps between consecutive pings, capped so a
+  // closed tab (a big gap to the next login) never counts as active time.
+  function timeSpent(pingList) {
+    const CAP_MS = 2 * 60_000
+    let ms = 0
+    for (let i = 1; i < pingList.length; i++) {
+      const gap = new Date(pingList[i].pinged_at) - new Date(pingList[i - 1].pinged_at)
+      ms += Math.min(gap, CAP_MS)
+    }
+    return ms
+  }
+
+  function formatDuration(ms) {
+    const totalMinutes = Math.round(ms / 60000)
+    const h = Math.floor(totalMinutes / 60)
+    const m = totalMinutes % 60
+    return h === 0 ? `${m}m` : `${h}h ${m}m`
   }
 
   if (loading) return <div className="flex justify-center py-20"><Spinner className="w-8 h-8" /></div>
@@ -60,6 +89,11 @@ export default function StudentDetail() {
 
   const approvedCount = submissions.filter(s => ['peer_approved', 'coach_verified'].includes(s.status)).length
   const reworkCount = submissions.filter(s => s.status === 'needs_rework').length
+
+  const weekAgo = new Date(Date.now() - 7 * 86400000)
+  const pingsThisWeek = pings.filter(p => new Date(p.pinged_at) >= weekAgo)
+  const totalTime = formatDuration(timeSpent(pings))
+  const weekTime = formatDuration(timeSpent(pingsThisWeek))
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -86,7 +120,7 @@ export default function StudentDetail() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <Card className="text-center py-4">
           <div className="font-display text-3xl text-atlantic-navy">{submissions.length}</div>
           <p className="text-xs text-denim mt-1">Submissions</p>
@@ -98,6 +132,10 @@ export default function StudentDetail() {
         <Card className="text-center py-4">
           <div className="font-display text-3xl text-red-600">{reworkCount}</div>
           <p className="text-xs text-denim mt-1">Need rework</p>
+        </Card>
+        <Card className="text-center py-4">
+          <div className="font-display text-3xl text-atlantic-navy">{totalTime}</div>
+          <p className="text-xs text-denim mt-1">Time on platform · {weekTime} this week</p>
         </Card>
       </div>
 

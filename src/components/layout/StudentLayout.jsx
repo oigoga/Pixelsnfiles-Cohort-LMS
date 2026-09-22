@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { useActivityPing } from '../../hooks/useActivityPing'
 import { Logo } from '../ui/Logo'
 import { ContentSearch } from '../student/ContentSearch'
 
@@ -14,6 +15,7 @@ const navItems = [
 
 export default function StudentLayout() {
   const { profile, signOut } = useAuth()
+  useActivityPing(profile?.id, profile?.cohort_id)
 
   return (
     <div className="min-h-screen flex flex-col">
