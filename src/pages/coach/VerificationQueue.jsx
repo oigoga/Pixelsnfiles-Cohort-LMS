@@ -23,7 +23,7 @@ export default function VerificationQueue() {
       .select(`
         *,
         tasks(title, type, requires_coach_verification, modules(title, week_number)),
-        students(profiles(full_name, email)),
+        students!submissions_student_id_fkey(profiles(full_name, email)),
         peer_groups(label)
       `)
       .in('status', ['submitted', 'peer_approved'])

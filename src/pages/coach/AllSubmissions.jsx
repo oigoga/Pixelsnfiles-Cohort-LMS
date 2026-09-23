@@ -38,7 +38,7 @@ export default function AllSubmissions() {
 
     const [{ data: stu }, { data: mods }, { data: subs }] = await Promise.all([
       supabase.from('students')
-        .select('id, profiles(full_name, email)')
+        .select('id, peer_group_id, profiles(full_name, email), peer_groups(label)')
         .eq('cohort_id', cId)
         .neq('status', 'withdrawn')
         .order('created_at'),
@@ -47,7 +47,8 @@ export default function AllSubmissions() {
         .select(`
           *,
           tasks!inner(title, type, requires_coach_verification, modules!inner(title, week_number, cohort_id)),
-          students(id, profiles(full_name, email)),
+          students!submissions_student_id_fkey(id, peer_group_id, profiles(full_name, email)),
+          assigned_reviewer:students!submissions_assigned_reviewer_id_fkey(id, profiles(full_name)),
           peer_groups(label)
         `)
         .eq('tasks.modules.cohort_id', cId)
@@ -84,6 +85,11 @@ export default function AllSubmissions() {
     }
 
     setLoading(false)
+  }
+
+  async function assignReviewer(submissionId, reviewerId) {
+    await supabase.from('submissions').update({ assigned_reviewer_id: reviewerId || null }).eq('id', submissionId)
+    await load(cohortId)
   }
 
   if (loading) return <div className="flex justify-center py-20"><Spinner className="w-8 h-8" /></div>
@@ -167,6 +173,27 @@ export default function AllSubmissions() {
                         </span>
                       )}
                     </p>
+                    {sub.tasks?.type !== 'team' && (
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-denim">
+                          Reviewer: {sub.assigned_reviewer ? sub.assigned_reviewer.profiles?.full_name : 'open to pod'}
+                        </span>
+                        <select
+                          value={sub.assigned_reviewer_id || ''}
+                          onChange={e => assignReviewer(sub.id, e.target.value)}
+                          className="input-field text-xs py-1"
+                        >
+                          <option value="">— Open to pod —</option>
+                          {students.filter(s => s.id !== sub.student_id).map(s => (
+                            <option key={s.id} value={s.id}>
+                              {s.profiles?.full_name || s.profiles?.email}
+                              {s.peer_groups?.label ? ` — ${s.peer_groups.label}` : ''}
+                              {s.peer_group_id === sub.students?.peer_group_id ? '' : ' (different pod)'}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                   <Button variant="secondary" onClick={() => setReviewing(sub)}>Review</Button>
                 </div>

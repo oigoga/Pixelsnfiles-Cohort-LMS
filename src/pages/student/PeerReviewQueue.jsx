@@ -26,8 +26,7 @@ export default function PeerReviewQueue() {
       .eq('profile_id', profile.id)
       .single()
     setStudent(stu)
-
-    if (!stu?.peer_group_id) { setLoading(false); return }
+    if (!stu) { setLoading(false); return }
 
     // Find groupmates' individual submissions that are in 'submitted' state
     // and haven't been reviewed by me yet
@@ -38,24 +37,37 @@ export default function PeerReviewQueue() {
       .neq('id', stu.id)
 
     const gmIds = groupmates?.map(g => g.id) || []
-    if (!gmIds.length) { setLoading(false); return }
 
-    // Submissions to review and my own past reviews are independent queries.
-    const [{ data: subs }, { data: myReviews }] = await Promise.all([
+    // Three independent queries: unassigned pod submissions, anything a
+    // coach specifically assigned to me (any pod), and my own past reviews.
+    const [{ data: podSubs }, { data: assignedSubs }, { data: myReviews }] = await Promise.all([
+      gmIds.length
+        ? supabase
+            .from('submissions')
+            .select('*, tasks(title, definition_of_done, module_id, modules(title)), students!submissions_student_id_fkey(peer_group_id, profiles(full_name))')
+            .in('student_id', gmIds)
+            .eq('status', 'submitted')
+            .is('peer_group_id', null) // individual tasks only
+            .is('assigned_reviewer_id', null) // not claimed by a specific assignment
+        : Promise.resolve({ data: [] }),
       supabase
         .from('submissions')
-        .select('*, tasks(title, definition_of_done, module_id, modules(title)), students(profiles(full_name))')
-        .in('student_id', gmIds)
+        .select('*, tasks(title, definition_of_done, module_id, modules(title)), students!submissions_student_id_fkey(peer_group_id, profiles(full_name))')
+        .eq('assigned_reviewer_id', stu.id)
         .eq('status', 'submitted')
-        .is('peer_group_id', null), // individual tasks only
+        .is('peer_group_id', null),
       supabase
         .from('peer_reviews')
         .select('submission_id')
         .eq('reviewer_student_id', stu.id),
     ])
 
+    const seen = new Set()
+    const merged = [...(podSubs || []), ...(assignedSubs || [])]
+      .filter(s => (seen.has(s.id) ? false : (seen.add(s.id), true)))
+
     const reviewed = new Set(myReviews?.map(r => r.submission_id))
-    setQueue((subs || []).filter(s => !reviewed.has(s.id)))
+    setQueue(merged.filter(s => !reviewed.has(s.id)))
     setLoading(false)
   }
 
@@ -104,7 +116,7 @@ export default function PeerReviewQueue() {
         <h1 className="font-display text-3xl text-atlantic-navy mt-1">Peer Review Queue</h1>
       </div>
 
-      {!student?.peer_group_id && (
+      {!student?.peer_group_id && queue.length === 0 && (
         <Card>
           <p className="text-denim text-sm">Groups haven't been assigned yet. Check back after registration closes.</p>
         </Card>
@@ -117,18 +129,26 @@ export default function PeerReviewQueue() {
       )}
 
       {/* Queue list */}
-      {!reviewing && queue.map(sub => (
+      {!reviewing && queue.map(sub => {
+        const isCrossPod = sub.assigned_reviewer_id && sub.students?.peer_group_id !== student?.peer_group_id
+        return (
         <Card key={sub.id}>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs text-denim mb-1">{sub.tasks?.modules?.title}</p>
+              <div className="flex flex-wrap gap-2 mb-1">
+                <p className="text-xs text-denim">{sub.tasks?.modules?.title}</p>
+                {sub.assigned_reviewer_id && <Badge variant="info">Assigned to you</Badge>}
+              </div>
               <p className="font-semibold text-classic-navy text-sm">{sub.tasks?.title}</p>
-              <p className="text-xs text-denim mt-1">by {sub.students?.profiles?.full_name || 'Groupmate'}</p>
+              <p className="text-xs text-denim mt-1">
+                by {sub.students?.profiles?.full_name || 'Groupmate'}{isCrossPod ? ' (different pod)' : ''}
+              </p>
             </div>
             <Button onClick={() => startReview(sub)}>Review</Button>
           </div>
         </Card>
-      ))}
+        )
+      })}
 
       {/* Active review */}
       {reviewing && (
