@@ -8,6 +8,7 @@ import { Spinner } from '../components/ui/Spinner'
 const POINTS = {
   coach_verified: 3,
   peer_approved:  2,
+  done:           2,
   submitted:      1,
   needs_rework:   0,
   not_started:    0,
@@ -69,7 +70,7 @@ export default function Leaderboard() {
     const studentScores = stuData.map(s => {
       const mySubs = subList.filter(sub => sub.student_id === s.id)
       const points = mySubs.reduce((sum, sub) => sum + (POINTS[sub.status] || 0), 0)
-      const approved = mySubs.filter(sub => ['peer_approved', 'coach_verified'].includes(sub.status)).length
+      const approved = mySubs.filter(sub => ['peer_approved', 'coach_verified', 'done'].includes(sub.status)).length
       return {
         id:        s.id,
         name:      s.profiles?.full_name || 'Student',
@@ -98,7 +99,7 @@ export default function Leaderboard() {
       // Individual subs from this member
       subList.filter(sub => sub.student_id === s.id).forEach(sub => {
         groupMap[s.peer_group_id].points   += POINTS[sub.status] || 0
-        if (['peer_approved', 'coach_verified'].includes(sub.status))
+        if (['peer_approved', 'coach_verified', 'done'].includes(sub.status))
           groupMap[s.peer_group_id].approved++
       })
     })
@@ -111,7 +112,7 @@ export default function Leaderboard() {
         teamSubsByGroup[key] = sub
         if (groupMap[sub.peer_group_id]) {
           groupMap[sub.peer_group_id].points   += POINTS[sub.status] || 0
-          if (['peer_approved', 'coach_verified'].includes(sub.status))
+          if (['peer_approved', 'coach_verified', 'done'].includes(sub.status))
             groupMap[sub.peer_group_id].approved++
         }
       }

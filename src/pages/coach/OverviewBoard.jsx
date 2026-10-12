@@ -11,6 +11,7 @@ const cellColor = {
   peer_approved:  'bg-green-100 text-green-700',
   needs_rework:   'bg-red-100 text-red-700',
   coach_verified: 'bg-honeycomb/40 text-amber-800',
+  done:           'bg-green-100 text-green-700',
 }
 
 const cellLabel = {
@@ -19,6 +20,7 @@ const cellLabel = {
   peer_approved:  'PA',
   needs_rework:   'RW',
   coach_verified: 'CV',
+  done:           '✓',
 }
 
 export default function OverviewBoard() {
@@ -93,7 +95,7 @@ export default function OverviewBoard() {
       .in('student_id', stuIds)
 
     // Build grid: studentId → moduleId → best status
-    const statusPriority = ['coach_verified', 'peer_approved', 'submitted', 'needs_rework', 'not_started']
+    const statusPriority = ['coach_verified', 'peer_approved', 'done', 'submitted', 'needs_rework', 'not_started']
     const gridData = {}
 
     stuList.forEach(s => {

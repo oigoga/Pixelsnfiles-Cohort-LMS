@@ -85,7 +85,7 @@ export default function StudentsBoard() {
       statsData[sub.student_id][week] ||= { ...emptyWeekStat }
       const bucket = statsData[sub.student_id][week]
       bucket.submitted++
-      if (sub.status === 'peer_approved') bucket.approved++
+      if (sub.status === 'peer_approved' || sub.status === 'done') bucket.approved++
       if (sub.status === 'needs_rework') bucket.rework++
       if (sub.status === 'coach_verified') bucket.verified++
 

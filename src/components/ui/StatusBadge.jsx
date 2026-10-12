@@ -3,6 +3,7 @@ import { Badge } from './Badge'
 const statusConfig = {
   not_started:    { label: 'Not started',     variant: 'default' },
   submitted:      { label: 'Submitted',        variant: 'info' },
+  done:           { label: 'Done',             variant: 'success' },
   peer_approved:  { label: 'Peer approved',    variant: 'success' },
   needs_rework:   { label: 'Needs rework',     variant: 'danger' },
   coach_verified: { label: 'Coach verified',   variant: 'honeycomb' },

@@ -132,6 +132,7 @@ export default function AllSubmissions() {
             <option value="peer_approved">Peer approved</option>
             <option value="needs_rework">Needs rework</option>
             <option value="coach_verified">Coach verified</option>
+            <option value="done">Done (checklist-only)</option>
           </select>
         </div>
       )}

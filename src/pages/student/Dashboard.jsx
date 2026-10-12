@@ -87,7 +87,7 @@ export default function StudentDashboard() {
   )
 
   const submittedTaskIds = new Set(submissions.map(s => s.task_id))
-  const doneCount = submissions.filter(s => ['peer_approved', 'coach_verified'].includes(s.status)).length
+  const doneCount = submissions.filter(s => ['peer_approved', 'coach_verified', 'done'].includes(s.status)).length
   const currentWeek = cohort?.current_week || 0
 
   return (

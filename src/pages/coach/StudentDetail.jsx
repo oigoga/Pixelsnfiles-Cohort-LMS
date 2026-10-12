@@ -87,7 +87,7 @@ export default function StudentDetail() {
   if (loading) return <div className="flex justify-center py-20"><Spinner className="w-8 h-8" /></div>
   if (!student) return <p className="text-denim">Student not found.</p>
 
-  const approvedCount = submissions.filter(s => ['peer_approved', 'coach_verified'].includes(s.status)).length
+  const approvedCount = submissions.filter(s => ['peer_approved', 'coach_verified', 'done'].includes(s.status)).length
   const reworkCount = submissions.filter(s => s.status === 'needs_rework').length
 
   const weekAgo = new Date(Date.now() - 7 * 86400000)

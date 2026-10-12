@@ -106,6 +106,25 @@ export default function TaskView() {
     setEditingLink(false)
   }
 
+  async function markDone() {
+    setSubmitting(true)
+    setError('')
+    if (submission) {
+      const { error: err } = await supabase.from('submissions').update({ status: 'done' }).eq('id', submission.id)
+      if (err) setError(err.message)
+    } else {
+      const { data, error: err } = await supabase
+        .from('submissions')
+        .insert({ task_id: taskId, student_id: student.id, status: 'done' })
+        .select()
+        .single()
+      if (err) setError(err.message)
+      else setSubmission(data)
+    }
+    setSubmitting(false)
+    await load()
+  }
+
   async function submitWork(e) {
     e.preventDefault()
     setError('')
@@ -186,7 +205,9 @@ export default function TaskView() {
       {task.definition_of_done?.length > 0 && (
         <Card>
           <h2 className="font-display text-2xl font-bold text-atlantic-navy mb-1">You're done when…</h2>
-          <p className="text-sm text-denim mb-4">Every box needs to be true before you submit. No skipping.</p>
+          <p className="text-sm text-denim mb-4">
+            {task.requires_submission ? 'Every box needs to be true before you submit. No skipping.' : 'Make sure these are true, then check the box below.'}
+          </p>
           <ul className="space-y-3">
             {task.definition_of_done.map((item, i) => (
               <li key={i} className="flex items-start gap-3 text-base text-classic-navy bg-powder/40 rounded-xl px-4 py-3">
@@ -204,73 +225,94 @@ export default function TaskView() {
           {task.type === 'team' ? 'Team submission' : 'My submission'}
         </h2>
 
-        {submission && !canSubmit && (
-          <div className="mb-4 p-4 bg-powder/50 rounded-xl">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-sm font-semibold text-denim">Submitted link</p>
-              {submission.status === 'submitted' && !editingLink && (
-                <button
-                  onClick={() => { setEditLinkValue(submission.drive_link); setEditingLink(true); setError('') }}
-                  className="text-xs text-atlantic-navy hover:underline"
-                >
-                  Edit link
-                </button>
-              )}
-            </div>
-            {editingLink ? (
-              <form onSubmit={saveEditedLink} className="space-y-2 mt-2">
+        {!task.requires_submission ? (
+          submission?.status === 'done' ? (
+            <p className="text-base text-denim">✅ Marked done.</p>
+          ) : (
+            <div className="space-y-3">
+              <label className="flex items-start gap-3 cursor-pointer">
                 <input
-                  autoFocus
-                  type="url"
-                  required
-                  value={editLinkValue}
-                  onChange={e => setEditLinkValue(e.target.value)}
-                  className="input-field text-sm"
-                  placeholder="https://drive.google.com/…"
+                  type="checkbox"
+                  onChange={markDone}
+                  disabled={submitting}
+                  className="mt-1 w-5 h-5 accent-atlantic-navy"
                 />
-                {error && <p className="text-red-600 text-sm">{error}</p>}
-                <div className="flex gap-2">
-                  <Button type="submit" disabled={savingLink}>{savingLink ? 'Saving…' : 'Save link'}</Button>
-                  <button type="button" onClick={() => { setEditingLink(false); setError('') }}
-                    className="text-sm text-denim hover:text-classic-navy px-3">Cancel</button>
+                <span className="text-base text-classic-navy">Check this off once you've done it — no link needed.</span>
+              </label>
+              {error && <p className="text-red-600 text-base">{error}</p>}
+            </div>
+          )
+        ) : (
+          <>
+            {submission && !canSubmit && (
+              <div className="mb-4 p-4 bg-powder/50 rounded-xl">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-sm font-semibold text-denim">Submitted link</p>
+                  {submission.status === 'submitted' && !editingLink && (
+                    <button
+                      onClick={() => { setEditLinkValue(submission.drive_link); setEditingLink(true); setError('') }}
+                      className="text-xs text-atlantic-navy hover:underline"
+                    >
+                      Edit link
+                    </button>
+                  )}
                 </div>
-              </form>
-            ) : (
-              <a href={submission.drive_link} target="_blank" rel="noreferrer"
-                className="text-atlantic-navy hover:underline break-all text-base">{submission.drive_link}</a>
-            )}
-          </div>
-        )}
-
-        {canSubmit ? (
-          <form onSubmit={submitWork} className="space-y-4">
-            {submission?.status === 'needs_rework' && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-base text-red-700">
-                This submission needs rework. Update your work and resubmit the link.
+                {editingLink ? (
+                  <form onSubmit={saveEditedLink} className="space-y-2 mt-2">
+                    <input
+                      autoFocus
+                      type="url"
+                      required
+                      value={editLinkValue}
+                      onChange={e => setEditLinkValue(e.target.value)}
+                      className="input-field text-sm"
+                      placeholder="https://drive.google.com/…"
+                    />
+                    {error && <p className="text-red-600 text-sm">{error}</p>}
+                    <div className="flex gap-2">
+                      <Button type="submit" disabled={savingLink}>{savingLink ? 'Saving…' : 'Save link'}</Button>
+                      <button type="button" onClick={() => { setEditingLink(false); setError('') }}
+                        className="text-sm text-denim hover:text-classic-navy px-3">Cancel</button>
+                    </div>
+                  </form>
+                ) : (
+                  <a href={submission.drive_link} target="_blank" rel="noreferrer"
+                    className="text-atlantic-navy hover:underline break-all text-base">{submission.drive_link}</a>
+                )}
               </div>
             )}
-            <div>
-              <label className="eyebrow block mb-1.5">Google Drive link</label>
-              <input
-                type="url"
-                required
-                value={driveLink}
-                onChange={e => setDriveLink(e.target.value)}
-                placeholder="https://drive.google.com/…"
-                className="input-field"
-              />
-              <p className="text-sm text-denim mt-1">Make sure the link is set to "Anyone with the link can view".</p>
-            </div>
-            {error && <p className="text-red-600 text-base">{error}</p>}
-            <Button type="submit" disabled={submitting}>
-              {submitting ? 'Submitting…' : submission ? 'Resubmit' : 'Submit work'}
-            </Button>
-          </form>
-        ) : (
-          <p className="text-base text-denim">
-            {submission.status === 'peer_approved' && '✅ Approved by a peer.'}
-            {submission.status === 'coach_verified' && '🏅 Verified by the coach.'}
-          </p>
+
+            {canSubmit ? (
+              <form onSubmit={submitWork} className="space-y-4">
+                {submission?.status === 'needs_rework' && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-base text-red-700">
+                    This submission needs rework. Update your work and resubmit the link.
+                  </div>
+                )}
+                <div>
+                  <label className="eyebrow block mb-1.5">Google Drive link</label>
+                  <input
+                    type="url"
+                    required
+                    value={driveLink}
+                    onChange={e => setDriveLink(e.target.value)}
+                    placeholder="https://drive.google.com/…"
+                    className="input-field"
+                  />
+                  <p className="text-sm text-denim mt-1">Make sure the link is set to "Anyone with the link can view".</p>
+                </div>
+                {error && <p className="text-red-600 text-base">{error}</p>}
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? 'Submitting…' : submission ? 'Resubmit' : 'Submit work'}
+                </Button>
+              </form>
+            ) : (
+              <p className="text-base text-denim">
+                {submission.status === 'peer_approved' && '✅ Approved by a peer.'}
+                {submission.status === 'coach_verified' && '🏅 Verified by the coach.'}
+              </p>
+            )}
+          </>
         )}
       </Card>
 
