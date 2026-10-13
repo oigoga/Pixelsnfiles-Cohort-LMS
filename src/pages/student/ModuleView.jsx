@@ -50,7 +50,6 @@ export default function ModuleView() {
   const [tasks, setTasks] = useState([])
   const [submissions, setSubmissions] = useState({})
   const [pinnedAnnouncements, setPinnedAnnouncements] = useState([])
-  const [activePreview, setActivePreview] = useState(null)
 
   useEffect(() => { load() }, [moduleId])
 
@@ -136,60 +135,63 @@ export default function ModuleView() {
             : []),
           ...resources,
         ]
-        const activeSrc = activePreview ? getEmbedSrc(allRes.find(r => r.id === activePreview)?.url) : null
-        const activeLabel = allRes.find(r => r.id === activePreview)?.label
+        const embeds = allRes
+          .map(r => ({ ...r, embedSrc: getEmbedSrc(r.url) }))
+          .filter(r => r.embedSrc)
+        const links = allRes.filter(r => !getEmbedSrc(r.url))
+
+        const header = r => (
+          <a
+            href={r.url}
+            target="_blank"
+            rel="noreferrer"
+            title={r.label}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-atlantic-navy"
+          >
+            <span className="shrink-0">{resourceIcons[r.type] || '🔗'}</span>
+            <span className="flex-1 min-w-0 truncate">{r.label}</span>
+            <span className="shrink-0 text-denim">↗</span>
+          </a>
+        )
 
         return (
-          <div className="space-y-3">
-            <div className="flex flex-wrap gap-3">
-              {allRes.map(r => {
-                const canEmbed = !!getEmbedSrc(r.url)
-                const isActive = activePreview === r.id
-                const isRecording = r.id === '__recording__'
-                const baseClass = `inline-flex items-center rounded-xl border text-sm font-medium transition-all`
-                const colorClass = isActive
-                  ? 'bg-atlantic-navy border-atlantic-navy text-soft-butter shadow-sm'
-                  : isRecording
-                  ? 'bg-atlantic-navy/5 border-atlantic-navy/20 text-atlantic-navy hover:bg-atlantic-navy/10'
-                  : 'bg-white border-powder text-atlantic-navy hover:border-denim hover:shadow-sm'
+          <div className="space-y-4">
+            <h2 className="font-display text-2xl font-bold text-atlantic-navy">Resources</h2>
 
-                return (
-                  <div key={r.id} className={`${baseClass} ${colorClass}`}>
-                    <a
-                      href={r.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-2 pl-4 py-2.5"
-                    >
-                      <span>{resourceIcons[r.type] || '🔗'}</span>
-                      <span>{r.label}</span>
-                    </a>
-                    {canEmbed ? (
-                      <button
-                        onClick={() => setActivePreview(isActive ? null : r.id)}
-                        className={`pl-1.5 pr-3 py-2.5 transition-colors ${isActive ? 'text-powder hover:text-white' : 'text-denim hover:text-atlantic-navy'}`}
-                        title={isActive ? 'Close preview' : 'Preview'}
-                      >
-                        {isActive ? '✕' : '▾'}
-                      </button>
-                    ) : (
-                      <span className="pr-3" />
-                    )}
+            {embeds.length > 0 && (
+              <div className="grid gap-[0.6rem] grid-cols-[repeat(auto-fill,minmax(220px,1fr))]">
+                {embeds.map(r => (
+                  <div key={r.id} className="rounded-xl border border-powder bg-white overflow-hidden hover:border-denim hover:shadow-sm transition-all">
+                    <div className="border-b border-powder bg-powder/40">{header(r)}</div>
+                    <iframe
+                      src={r.embedSrc}
+                      loading="lazy"
+                      allow="autoplay; fullscreen"
+                      allowFullScreen
+                      title={r.label}
+                      className="w-full aspect-video border-0 block bg-black"
+                    />
                   </div>
-                )
-              })}
-            </div>
+                ))}
+              </div>
+            )}
 
-            {activePreview && activeSrc && (
-              <div className="rounded-2xl overflow-hidden border border-powder bg-black" style={{ aspectRatio: '16/9' }}>
-                <iframe
-                  key={activePreview}
-                  src={activeSrc}
-                  className="w-full h-full"
-                  allowFullScreen
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  title={activeLabel}
-                />
+            {links.length > 0 && (
+              <div className="grid gap-[0.6rem] grid-cols-[repeat(auto-fill,minmax(200px,1fr))]">
+                {links.map(r => (
+                  <a
+                    key={r.id}
+                    href={r.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={r.label}
+                    className="flex items-center gap-2 rounded-xl border border-powder bg-white px-3 py-2.5 text-sm font-medium text-atlantic-navy hover:border-denim hover:shadow-sm transition-all"
+                  >
+                    <span className="shrink-0">{resourceIcons[r.type] || '🔗'}</span>
+                    <span className="flex-1 min-w-0 truncate">{r.label}</span>
+                    <span className="shrink-0 text-denim">→</span>
+                  </a>
+                ))}
               </div>
             )}
           </div>
